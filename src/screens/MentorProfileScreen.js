@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Alert,
@@ -8,6 +9,8 @@ import { auth, db } from '../config/firebase';
 import Avatar from '../components/Avatar';
 import { hasReviews, ratingText } from '../utils/rating';
 import ReviewsSection from '../components/ReviewsSection';
+import { loadWithCache } from '../utils/cache';
+import { useOnline, warnOffline } from '../utils/connection';
 
 export default function MentorProfileScreen({ route }) {
   const { mentorId } = route.params;
@@ -16,6 +19,7 @@ export default function MentorProfileScreen({ route }) {
   const [selectedSkill, setSelectedSkill] = useState(null);
   const [alreadyRequested, setAlreadyRequested] = useState(false);
   const [sending, setSending] = useState(false);
+  const online = useOnline();
 
   useEffect(() => {
     loadMentor();
@@ -24,15 +28,19 @@ export default function MentorProfileScreen({ route }) {
   const loadMentor = async () => {
     setLoading(true);
     try {
-      const mentorSnap = await getDoc(doc(db, 'users', mentorId));
-      if (mentorSnap.exists()) {
-        const data = mentorSnap.data();
+      // fresh from Firestore when online, the saved copy when offline
+      const data = await loadWithCache(`${auth.currentUser.uid}_mentor_${mentorId}`, async () => {
+        const mentorSnap = await getDoc(doc(db, 'users', mentorId));
+        return mentorSnap.exists() ? mentorSnap.data() : null;
+      });
+
+      if (data) {
         setMentor(data);
         const firstSkill = data.skillsToTeach?.[0] || null;
         setSelectedSkill(firstSkill);
         checkExistingRequest(firstSkill);
       } else {
-        Alert.alert('Not found', 'This mentor profile no longer exists.');
+        Alert.alert('Not available', 'This mentor profile could not be loaded right now.');
       }
     } catch (error) {
       console.log('Error loading mentor:', error.message);
@@ -47,6 +55,9 @@ export default function MentorProfileScreen({ route }) {
       setAlreadyRequested(false);
       return;
     }
+
+    if (!online) return;
+
     try {
       const q = query(
         collection(db, 'requests'),
@@ -71,10 +82,13 @@ export default function MentorProfileScreen({ route }) {
   };
 
   const handleRequestToExchange = async () => {
+    if (!online) { warnOffline(); return; }
+
     if (!selectedSkill) {
       Alert.alert('Pick a skill', 'Please select a skill to learn first.');
       return;
     }
+
     setSending(true);
     try {
       const myUid = auth.currentUser.uid;

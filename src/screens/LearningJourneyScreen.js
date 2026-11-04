@@ -7,21 +7,26 @@ import { auth, db } from '../config/firebase';
 import ScreenHeader from '../components/ScreenHeader';
 import Avatar from '../components/Avatar';
 import ProgressRing from '../components/ProgressRing';
+import { loadWithCache } from '../utils/cache';
+import { useOnline } from '../utils/connection';
 
 export default function LearningJourneyScreen({ navigation }) {
   const [loops, setLoops] = useState([]);
   const [loading, setLoading] = useState(true);
+  const online = useOnline();
 
   // Loops where I am the learner: accepted requests that I sent
   const loadLoops = async () => {
-    try {
-      const myUid = auth.currentUser.uid;
+    const myUid = auth.currentUser.uid;
+
+    // fresh from Firestore when online, the saved copy when offline
+    const result = await loadWithCache(`${myUid}_learning`, async () => {
       const snap = await getDocs(
         query(collection(db, 'requests'), where('senderId', '==', myUid), where('status', '==', 'accepted'))
       );
 
       // count the logged sessions of each Loop to work out its progress
-      const result = await Promise.all(
+      return Promise.all(
         snap.docs.map(async (d) => {
           const sessions = await getDocs(collection(db, 'requests', d.id, 'progress'));
           return {
@@ -32,19 +37,17 @@ export default function LearningJourneyScreen({ navigation }) {
           };
         })
       );
-      setLoops(result);
-    } catch (error) {
-      console.log('Error loading learning data:', error.message);
-    } finally {
-      setLoading(false);
-    }
+    });
+
+    if (result) setLoops(result);
+    setLoading(false);
   };
 
-  // reload whenever this tab is opened, so new sessions show straight away
+  // reload when the tab is opened, and again when the connection comes back
   useFocusEffect(
     useCallback(() => {
       loadLoops();
-    }, [])
+    }, [online])
   );
 
   const active = loops.filter((l) => l.percent < 100);

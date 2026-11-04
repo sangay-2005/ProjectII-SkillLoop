@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView,
@@ -6,6 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { useOnline, warnOffline } from '../utils/connection';
 
 const formatTime = (timestamp) =>
   new Date(timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -16,6 +18,7 @@ export default function ChatScreen({ route }) {
   const { requestId, partnerName } = route.params;
   const myUid = auth.currentUser.uid;
   const myName = auth.currentUser.displayName || auth.currentUser.email;
+  const online = useOnline();
 
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
@@ -37,6 +40,8 @@ export default function ChatScreen({ route }) {
   const sendMessage = async () => {
     const content = text.trim();
     if (!content || sending) return;
+
+    if (!online) { warnOffline(); return; }
 
     setSending(true);
     setText('');

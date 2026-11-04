@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,12 +6,15 @@ import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import StarRating from './StarRating';
 import { updateMentorRating } from '../utils/reviews';
+import { useOnline, warnOffline } from '../utils/connection';
 
 const formatDate = (timestamp) =>
   new Date(timestamp).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 // Lets a learner rate their mentor for one Loop (one review per Loop)
 export default function ReviewCard({ loop, requestId, sessionCount }) {
+  const online = useOnline();
+
   const [review, setReview] = useState(null); // my saved review, if any
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -40,6 +44,8 @@ export default function ReviewCard({ loop, requestId, sessionCount }) {
   };
 
   const saveReview = async () => {
+    if (!online) { warnOffline(); return; }
+
     if (stars === 0) {
       Alert.alert('Pick a rating', 'Tap the stars to rate your mentor.');
       return;
@@ -70,6 +76,8 @@ export default function ReviewCard({ loop, requestId, sessionCount }) {
   };
 
   const confirmDelete = () => {
+    if (!online) { warnOffline(); return; }
+
     Alert.alert('Delete review?', 'Your rating will be removed from this mentor.', [
       { text: 'Cancel', style: 'cancel' },
       {

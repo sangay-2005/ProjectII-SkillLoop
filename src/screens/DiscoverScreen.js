@@ -1,38 +1,44 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, FlatList, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { collection, getDocs } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import ScreenHeader from '../components/ScreenHeader';
 import CategoryChips from '../components/CategoryChips';
 import MentorCard from '../components/MentorCard';
+import { loadWithCache } from '../utils/cache';
+import { useOnline } from '../utils/connection';
 
 export default function DiscoverScreen({ navigation }) {
   const [allMentors, setAllMentors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
-
-  useFocusEffect(
-    useCallback(() => {
-      loadMentors();
-    }, [])
-  );
+  const online = useOnline();
 
   const loadMentors = async () => {
     setLoading(true);
-    try {
+    const myUid = auth.currentUser?.uid;
+
+    // fresh from Firestore when online, the saved copy when offline
+    const others = await loadWithCache(`${myUid}_discover`, async () => {
       const snapshot = await getDocs(collection(db, 'users'));
-      const myUid = auth.currentUser?.uid;
-      const others = [];
+      const list = [];
       snapshot.forEach((d) => {
-        if (d.id !== myUid) others.push({ id: d.id, ...d.data() });
+        if (d.id !== myUid) list.push({ id: d.id, ...d.data() });
       });
-      setAllMentors(others);
-    } catch (error) {
-      console.log('Error loading mentors:', error.message);
-    } finally {
-      setLoading(false);
-    }
+      return list;
+    });
+
+    if (others) setAllMentors(others);
+    setLoading(false);
   };
+
+  // reload when the tab is opened, and again when the connection comes back
+  useFocusEffect(
+    useCallback(() => {
+      loadMentors();
+    }, [online])
+  );
 
   const categories = ['All', ...new Set(allMentors.map((m) => m.category).filter(Boolean))];
   const shown = allMentors.filter((m) => activeCategory === 'All' || m.category === activeCategory);
@@ -50,7 +56,7 @@ export default function DiscoverScreen({ navigation }) {
       </Text>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#C97C1F" style={{ marginTop: 20 }} />
+        <ActivityIndicator size="large" color="#E8A33D" style={{ marginTop: 20 }} />
       ) : (
         <FlatList
           data={shown}

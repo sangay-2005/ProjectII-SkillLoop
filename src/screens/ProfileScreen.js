@@ -8,27 +8,32 @@ import { auth, db } from '../config/firebase';
 import ScreenHeader from '../components/ScreenHeader';
 import Avatar from '../components/Avatar';
 import { ratingText } from '../utils/rating';
+import { loadWithCache } from '../utils/cache';
+import { useOnline, warnOffline } from '../utils/connection';
 
 export default function ProfileScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const online = useOnline();
 
   const loadProfile = async () => {
-    try {
-      const snap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-      if (snap.exists()) setProfile(snap.data());
-    } catch (error) {
-      console.log('Error loading profile:', error.message);
-    } finally {
-      setLoading(false);
-    }
+    const myUid = auth.currentUser.uid;
+
+    // fresh from Firestore when online, the saved copy when offline
+    const data = await loadWithCache(`${myUid}_profile`, async () => {
+      const snap = await getDoc(doc(db, 'users', myUid));
+      return snap.exists() ? snap.data() : null;
+    });
+
+    if (data) setProfile(data);
+    setLoading(false);
   };
 
-  // reload every time this tab is opened, so edits show up straight away
+  // reload when the tab is opened, and again when the connection comes back
   useFocusEffect(
     useCallback(() => {
       loadProfile();
-    }, [])
+    }, [online])
   );
 
   const handleLogout = () => {
@@ -46,6 +51,15 @@ export default function ProfileScreen({ navigation }) {
         },
       },
     ]);
+  };
+
+  // editing needs the internet
+  const handleEdit = () => {
+    if (!online) {
+      warnOffline();
+      return;
+    }
+    navigation.navigate('EditProfile');
   };
 
   // one number in the stats row
@@ -99,10 +113,11 @@ export default function ProfileScreen({ navigation }) {
 
             {/* edit button */}
             <TouchableOpacity
-              onPress={() => navigation.navigate('EditProfile')}
+              onPress={handleEdit}
               style={{
                 flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3E5F5',
                 paddingVertical: 8, paddingHorizontal: 18, borderRadius: 16, marginTop: 14,
+                opacity: online ? 1 : 0.5,
               }}
             >
               <Ionicons name="create-outline" size={16} color="#8E24AA" />

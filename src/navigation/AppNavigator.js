@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
@@ -7,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { loadWithCache } from '../utils/cache';
 
 import LoginScreen from '../screens/auth/LoginScreen';
 import SignupScreen from '../screens/auth/SignupScreen';
@@ -26,7 +28,7 @@ import ChatListScreen from '../screens/ChatListScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// cream background behind every screen
+// Cream background behind every screen
 const AppTheme = {
   ...DefaultTheme,
   colors: {
@@ -64,9 +66,16 @@ function MainTabs() {
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+        },
         tabBarIcon: ({ focused, color }) => (
-          <Ionicons name={TAB_ICONS[route.name][focused ? 0 : 1]} size={24} color={color} />
+          <Ionicons
+            name={TAB_ICONS[route.name][focused ? 0 : 1]}
+            size={24}
+            color={color}
+          />
         ),
       })}
     >
@@ -87,26 +96,41 @@ export default function AppNavigator() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        try {
-          const snap = await getDoc(doc(db, 'users', currentUser.uid));
-          
-          setHasProfile(snap.exists() && snap.data().profileCompleted === true);
-        } catch (error) {
-          console.log('Profile check failed:', error.message);
-          setHasProfile(false);
-        }
+        // Online: ask Firestore and remember the answer.
+        // Offline: use the remembered answer.
+        const completed = await loadWithCache(
+          `${currentUser.uid}_hasProfile`,
+          async () => {
+            const snap = await getDoc(doc(db, 'users', currentUser.uid));
+            return (
+              snap.exists() &&
+              snap.data().profileCompleted === true
+            );
+          }
+        );
+
+        setHasProfile(completed === true);
       } else {
         setHasProfile(false);
       }
+
       setUser(currentUser);
       setCheckingAuth(false);
     });
+
     return unsubscribe;
   }, []);
 
   if (checkingAuth) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FAF7F0' }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#FAF7F0',
+        }}
+      >
         <ActivityIndicator size="large" color="#E8A33D" />
       </View>
     );
@@ -116,33 +140,87 @@ export default function AppNavigator() {
     <NavigationContainer theme={AppTheme}>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: '#1F456D' },
+          headerStyle: {
+            backgroundColor: '#1F456D',
+          },
           headerTintColor: '#FAF7F0',
-          headerTitleStyle: { fontWeight: 'bold' },
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
           headerShadowVisible: false,
         }}
       >
         {!user ? (
           <>
-            <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="Signup" component={SignupScreen} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="Welcome"
+              component={WelcomeScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Login"
+              component={LoginScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Signup"
+              component={SignupScreen}
+              options={{ headerShown: false }}
+            />
           </>
         ) : !hasProfile ? (
           <Stack.Screen
             name="ProfileSetup"
-            options={{ title: 'Set Up Your Profile', headerBackVisible: false }}
+            options={{
+              title: 'Set Up Your Profile',
+              headerBackVisible: false,
+            }}
           >
-            {() => <ProfileSetupScreen onDone={() => setHasProfile(true)} />}
+            {() => (
+              <ProfileSetupScreen
+                onDone={() => setHasProfile(true)}
+              />
+            )}
           </Stack.Screen>
         ) : (
           <>
-            <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
-            <Stack.Screen name="MentorProfile" component={MentorProfileScreen} options={{ title: 'Mentor Profile' }} />
-            <Stack.Screen name="Chat" component={ChatScreen} options={({ route }) => ({ title: route.params?.partnerName || 'Chat' })} />
-            <Stack.Screen name="ChatList" component={ChatListScreen} options={{ title: 'Messages' }} />
-            <Stack.Screen name="LoopDetail" component={LoopDetailScreen} options={{ title: 'My Loop' }} />
-            <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
+            <Stack.Screen
+              name="MainTabs"
+              component={MainTabs}
+              options={{ headerShown: false }}
+            />
+
+            <Stack.Screen
+              name="MentorProfile"
+              component={MentorProfileScreen}
+              options={{ title: 'Mentor Profile' }}
+            />
+
+            <Stack.Screen
+              name="Chat"
+              component={ChatScreen}
+              options={({ route }) => ({
+                title: route.params?.partnerName || 'Chat',
+              })}
+            />
+
+            <Stack.Screen
+              name="ChatList"
+              component={ChatListScreen}
+              options={{ title: 'Messages' }}
+            />
+
+            <Stack.Screen
+              name="LoopDetail"
+              component={LoopDetailScreen}
+              options={{ title: 'My Loop' }}
+            />
+
+            <Stack.Screen
+              name="EditProfile"
+              component={EditProfileScreen}
+              options={{ title: 'Edit Profile' }}
+            />
           </>
         )}
       </Stack.Navigator>
