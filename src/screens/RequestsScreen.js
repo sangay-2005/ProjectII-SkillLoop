@@ -39,6 +39,7 @@ export default function RequestsScreen({ navigation }) {
     }
   };
 
+  // reload whenever this tab is opened
   useFocusEffect(
     useCallback(() => {
       loadRequests();
@@ -110,7 +111,7 @@ export default function RequestsScreen({ navigation }) {
               <Text style={styles.acceptText}>Accept</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.declineButton} onPress={() => updateStatus(item.id, 'declined')}>
-              <Ionicons name="close" size={16} color="#B3261E" />
+              <Ionicons name="close" size={16} color="#D62828" />
               <Text style={styles.declineText}>Decline</Text>
             </TouchableOpacity>
           </View>
@@ -119,7 +120,7 @@ export default function RequestsScreen({ navigation }) {
         {activeTab === 'Sent' && (
           <View style={styles.buttonRow}>
             <View style={styles.statusPill}>
-              <Ionicons name="time-outline" size={14} color="#C97C1F" />
+              <Ionicons name="time-outline" size={14} color="#B7791F" />
               <Text style={styles.statusText}>Pending</Text>
             </View>
             <TouchableOpacity style={styles.declineButton} onPress={() => confirmCancel(item.id)}>
@@ -129,11 +130,20 @@ export default function RequestsScreen({ navigation }) {
         )}
 
         {activeTab === 'Active' && (
-          <View style={styles.statusPill}>
-            <Ionicons name={iAmLearner ? 'school-outline' : 'easel-outline'} size={14} color="#2D6A4F" />
-            <Text style={[styles.statusText, { color: '#2D6A4F' }]}>
-              {iAmLearner ? 'You are learning' : 'You are teaching'}
-            </Text>
+          <View style={styles.buttonRow}>
+            <View style={[styles.statusPill, { backgroundColor: '#E8F5E9' }]}>
+              <Ionicons name={iAmLearner ? 'school-outline' : 'easel-outline'} size={14} color="#2D6A4F" />
+              <Text style={[styles.statusText, { color: '#2D6A4F' }]}>
+                {iAmLearner ? 'You are learning' : 'You are teaching'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.messageButton}
+              onPress={() => navigation.navigate('Chat', { requestId: item.id, partnerName: otherName })}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={16} color="#1F456D" />
+              <Text style={styles.messageText}>Message</Text>
+            </TouchableOpacity>
           </View>
         )}
       </TouchableOpacity>
@@ -159,7 +169,7 @@ export default function RequestsScreen({ navigation }) {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#C97C1F" style={{ marginTop: 20 }} />
+        <ActivityIndicator size="large" color="#E8A33D" style={{ marginTop: 20 }} />
       ) : (
         <FlatList
           data={lists[activeTab]}
@@ -195,22 +205,26 @@ const styles = StyleSheet.create({
   },
   skillPillText: { fontSize: 11, color: '#2D6A4F', fontWeight: '600' },
   message: { fontSize: 13, color: '#555', fontStyle: 'italic', marginTop: 10 },
-  buttonRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  buttonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
   acceptButton: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#2D6A4F',
     paddingVertical: 9, paddingHorizontal: 18, borderRadius: 12, marginRight: 10,
   },
   acceptText: { color: '#fff', fontWeight: '600', fontSize: 13, marginLeft: 4 },
   declineButton: {
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#B3261E',
+    flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D62828',
     paddingVertical: 8, paddingHorizontal: 16, borderRadius: 12,
   },
-  declineText: { color: '#B3261E', fontWeight: '600', fontSize: 13, marginLeft: 4 },
-  statusPill: {
-    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start',
-    backgroundColor: '#FBF0DC', paddingVertical: 5, paddingHorizontal: 10,
-    borderRadius: 12, marginRight: 10, marginTop: 10,
+  declineText: { color: '#D62828', fontWeight: '600', fontSize: 13, marginLeft: 4 },
+  messageButton: {
+    flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#1F456D',
+    paddingVertical: 7, paddingHorizontal: 14, borderRadius: 12,
   },
-  statusText: { fontSize: 12, color: '#C97C1F', fontWeight: '600', marginLeft: 4 },
+  messageText: { color: '#1F456D', fontWeight: '600', fontSize: 13, marginLeft: 4 },
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FBF0DC',
+    paddingVertical: 5, paddingHorizontal: 10, borderRadius: 12,
+  },
+  statusText: { fontSize: 12, color: '#B7791F', fontWeight: '600', marginLeft: 4 },
   emptyText: { textAlign: 'center', color: '#7A7468', marginTop: 20 },
 });

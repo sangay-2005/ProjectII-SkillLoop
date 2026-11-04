@@ -20,6 +20,8 @@ import LearningJourneyScreen from '../screens/LearningJourneyScreen';
 import LoopDetailScreen from '../screens/LoopDetailScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import ChatListScreen from '../screens/ChatListScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -30,7 +32,7 @@ const AppTheme = {
   colors: {
     ...DefaultTheme.colors,
     background: '#FAF7F0',
-    primary: '#C97C1F',
+    primary: '#E8A33D',
     card: '#1F456D',
     text: '#FAF7F0',
     border: '#1F456D',
@@ -87,11 +89,7 @@ export default function AppNavigator() {
       if (currentUser) {
         try {
           const snap = await getDoc(doc(db, 'users', currentUser.uid));
-          console.log(
-            'uid:', currentUser.uid,
-            '| doc exists:', snap.exists(),
-            '| profileCompleted:', snap.data()?.profileCompleted
-          );
+          
           setHasProfile(snap.exists() && snap.data().profileCompleted === true);
         } catch (error) {
           console.log('Profile check failed:', error.message);
@@ -109,7 +107,7 @@ export default function AppNavigator() {
   if (checkingAuth) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FAF7F0' }}>
-        <ActivityIndicator size="large" color="#C97C1F" />
+        <ActivityIndicator size="large" color="#E8A33D" />
       </View>
     );
   }
@@ -141,8 +139,10 @@ export default function AppNavigator() {
           <>
             <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
             <Stack.Screen name="MentorProfile" component={MentorProfileScreen} options={{ title: 'Mentor Profile' }} />
-            <Stack.Screen name="Chat" component={ChatScreen} options={{ title: 'Chat' }} />
+            <Stack.Screen name="Chat" component={ChatScreen} options={({ route }) => ({ title: route.params?.partnerName || 'Chat' })} />
+            <Stack.Screen name="ChatList" component={ChatListScreen} options={{ title: 'Messages' }} />
             <Stack.Screen name="LoopDetail" component={LoopDetailScreen} options={{ title: 'My Loop' }} />
+            <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
           </>
         )}
       </Stack.Navigator>

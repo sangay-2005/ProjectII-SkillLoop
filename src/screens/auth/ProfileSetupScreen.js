@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { updateProfile, signOut } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 
 const CATEGORIES = ['Technology', 'Music', 'Cooking', 'Arts', 'Dzongkha'];
@@ -16,23 +16,38 @@ const PRESET_SKILLS = [
   'Archery', 'Textile Weaving', 'Graphic Design', 'Gardening', 'Public Speaking',
 ];
 
-export default function ProfileSetupScreen({ onDone }) {
-  const [displayName, setDisplayName] = useState('');
-  const [location, setLocation] = useState('');
-  const [bio, setBio] = useState('');
-  const [category, setCategory] = useState('');
-  const [customCategory, setCustomCategory] = useState('');
-  const [teachSkills, setTeachSkills] = useState([]);
-  const [learnSkills, setLearnSkills] = useState([]);
-  const [levels, setLevels] = useState({}); // skill -> level
+// options for the teaching details
+const AVAILABILITY_OPTIONS = ['Weekdays', 'Weekday evenings', 'Weekends', 'Flexible'];
+const FORMAT_OPTIONS = ['In-person', 'Online'];
+const SESSION_LENGTHS = [30, 45, 60, 90, 120]; // minutes
+
+// Used twice: to create a profile after sign-up, and to edit it later (isEdit = true)
+export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {} }) {
+  // when editing, start from the saved values; a category that isn't in the list shows as "Other"
+  const savedCategory = initial.category || '';
+  const isCustomCategory = savedCategory !== '' && !CATEGORIES.includes(savedCategory);
+  const savedDetails = initial.teachingDetails || {};
+
+  const [displayName, setDisplayName] = useState(initial.displayName || '');
+  const [location, setLocation] = useState(initial.location || '');
+  const [bio, setBio] = useState(initial.bio || '');
+  const [category, setCategory] = useState(isCustomCategory ? 'Other' : savedCategory);
+  const [customCategory, setCustomCategory] = useState(isCustomCategory ? savedCategory : '');
+  const [teachSkills, setTeachSkills] = useState(initial.skillsToTeach || []);
+  const [learnSkills, setLearnSkills] = useState(initial.skillsToLearn || []);
+  const [levels, setLevels] = useState(initial.skillLevels || {}); // skill -> level
   const [customTeach, setCustomTeach] = useState('');
   const [customLearn, setCustomLearn] = useState('');
+  // teaching details
+  const [availability, setAvailability] = useState(savedDetails.availability || []);
+  const [formats, setFormats] = useState(savedDetails.format || []);
+  const [sessionLength, setSessionLength] = useState(savedDetails.sessionLength || null);
   const [saving, setSaving] = useState(false);
 
-  // tap a chip to select it, tap again to remove it
-  const toggleSkill = (list, setList, skill) => {
-    if (list.includes(skill)) setList(list.filter((s) => s !== skill));
-    else setList([...list, skill]);
+  // tap an option to select it, tap again to remove it
+  const toggleItem = (list, setList, item) => {
+    if (list.includes(item)) setList(list.filter((s) => s !== item));
+    else setList([...list, item]);
   };
 
   // add a skill the user typed themselves
@@ -45,6 +60,7 @@ export default function ProfileSetupScreen({ onDone }) {
     setText('');
   };
 
+  // the chosen category, or the one the user typed under "Other"
   const getFinalCategory = () => {
     if (category !== 'Other') return category;
     const typed = customCategory.trim();
@@ -69,11 +85,20 @@ export default function ProfileSetupScreen({ onDone }) {
       Alert.alert('Add a skill', 'Please pick at least one skill you can teach or want to learn.');
       return;
     }
+    // mentors must say when and how they teach
+    if (teachSkills.length > 0 && (availability.length === 0 || formats.length === 0 || !sessionLength)) {
+      Alert.alert(
+        'Teaching details',
+        'Please choose when you are available, how you teach and how long a session is.'
+      );
+      return;
+    }
 
     setSaving(true);
     try {
       const user = auth.currentUser;
 
+      // each skill you teach gets a level (Beginner by default)
       const skillLevels = {};
       teachSkills.forEach((skill) => {
         skillLevels[skill] = levels[skill] || 'Beginner';
@@ -81,9 +106,8 @@ export default function ProfileSetupScreen({ onDone }) {
 
       await updateProfile(user, { displayName: displayName.trim() });
 
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
-        email: user.email,
+      // the fields the user can edit
+      const profileData = {
         displayName: displayName.trim(),
         location: location.trim(),
         bio: bio.trim(),
@@ -91,10 +115,22 @@ export default function ProfileSetupScreen({ onDone }) {
         skillsToTeach: teachSkills,
         skillsToLearn: learnSkills,
         skillLevels: skillLevels,
-        rating: 5,
-        reviewsCount: 0,
-        profileCompleted: true,
-      });
+        teachingDetails: { availability, format: formats, sessionLength },
+      };
+
+      if (isEdit) {
+        // keep the rating, reviews and the rest of the document untouched
+        await updateDoc(doc(db, 'users', user.uid), profileData);
+      } else {
+        await setDoc(doc(db, 'users', user.uid), {
+          ...profileData,
+          uid: user.uid,
+          email: user.email,
+          rating: 0,        // no rating until somebody reviews this user
+          reviewsCount: 0,
+          profileCompleted: true,
+        });
+      }
 
       onDone();
     } catch (error) {
@@ -104,28 +140,31 @@ export default function ProfileSetupScreen({ onDone }) {
     }
   };
 
+  // one selectable chip, used for skills, availability, format and session length
+  const optionChip = (label, selected, onPress, color = '#2D6A4F') => (
+    <TouchableOpacity
+      key={label}
+      onPress={onPress}
+      style={[styles.chip, selected && { backgroundColor: color, borderColor: color }]}
+    >
+      {selected && <Ionicons name="checkmark" size={14} color="#fff" style={{ marginRight: 4 }} />}
+      <Text style={[styles.chipText, selected && { color: '#fff' }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+
   // one row of skill chips: presets first, then any custom ones the user added
-  const skillChips = (list, setList, selectedColor) => {
+  const skillChips = (list, setList, color) => {
     const all = [...PRESET_SKILLS, ...list.filter((s) => !PRESET_SKILLS.includes(s))];
     return (
       <View style={styles.chipRow}>
-        {all.map((skill) => {
-          const selected = list.includes(skill);
-          return (
-            <TouchableOpacity
-              key={skill}
-              onPress={() => toggleSkill(list, setList, skill)}
-              style={[styles.chip, selected && { backgroundColor: selectedColor, borderColor: selectedColor }]}
-            >
-              {selected && <Ionicons name="checkmark" size={14} color="#fff" style={{ marginRight: 4 }} />}
-              <Text style={[styles.chipText, selected && { color: '#fff' }]}>{skill}</Text>
-            </TouchableOpacity>
-          );
-        })}
+        {all.map((skill) =>
+          optionChip(skill, list.includes(skill), () => toggleItem(list, setList, skill), color)
+        )}
       </View>
     );
   };
 
+  // text box + button for adding a skill that isn't in the preset list
   const customInput = (text, setText, list, setList) => (
     <View style={styles.addRow}>
       <TextInput
@@ -145,7 +184,7 @@ export default function ProfileSetupScreen({ onDone }) {
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Tell us about you</Text>
+      <Text style={styles.title}>{isEdit ? 'Edit your profile' : 'Tell us about you'}</Text>
       <Text style={styles.subtitle}>This is what other members will see on your profile.</Text>
 
       <View style={styles.card}>
@@ -236,6 +275,35 @@ export default function ProfileSetupScreen({ onDone }) {
         )}
       </View>
 
+      {/* only mentors need teaching details */}
+      {teachSkills.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.label}>Teaching details *</Text>
+          <Text style={styles.smallLabel}>Learners see this on your profile before they send a request.</Text>
+
+          <Text style={styles.subLabel}>When are you available?</Text>
+          <View style={styles.chipRow}>
+            {AVAILABILITY_OPTIONS.map((opt) =>
+              optionChip(opt, availability.includes(opt), () => toggleItem(availability, setAvailability, opt))
+            )}
+          </View>
+
+          <Text style={styles.subLabel}>How do you teach?</Text>
+          <View style={styles.chipRow}>
+            {FORMAT_OPTIONS.map((opt) =>
+              optionChip(opt, formats.includes(opt), () => toggleItem(formats, setFormats, opt))
+            )}
+          </View>
+
+          <Text style={styles.subLabel}>How long is a session?</Text>
+          <View style={styles.chipRow}>
+            {SESSION_LENGTHS.map((mins) =>
+              optionChip(`${mins} mins`, sessionLength === mins, () => setSessionLength(mins), '#1F456D')
+            )}
+          </View>
+        </View>
+      )}
+
       <View style={styles.card}>
         <Text style={styles.label}>Skills I want to learn</Text>
         {skillChips(learnSkills, setLearnSkills, '#E8A33D')}
@@ -243,13 +311,18 @@ export default function ProfileSetupScreen({ onDone }) {
       </View>
 
       <TouchableOpacity style={styles.button} onPress={handleSave} disabled={saving}>
-        <Text style={styles.buttonText}>{saving ? 'Saving...' : 'Save and Continue'}</Text>
+        <Text style={styles.buttonText}>
+          {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Save and Continue'}
+        </Text>
         {!saving && <Ionicons name="arrow-forward" size={18} color="#E8A33D" style={{ marginLeft: 8 }} />}
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => signOut(auth)}>
-        <Text style={styles.link}>Log out</Text>
-      </TouchableOpacity>
+      {/* the log out link only makes sense while creating the profile */}
+      {!isEdit && (
+        <TouchableOpacity onPress={() => signOut(auth)}>
+          <Text style={styles.link}>Log out</Text>
+        </TouchableOpacity>
+      )}
     </ScrollView>
   );
 }
@@ -264,6 +337,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
   label: { fontSize: 14, fontWeight: 'bold', color: '#1F456D', marginBottom: 8, marginTop: 4 },
+  subLabel: { fontSize: 13, fontWeight: '600', color: '#1A1A1A', marginTop: 8, marginBottom: 6 },
   smallLabel: { fontSize: 12, color: '#5F6368', marginBottom: 8 },
   input: {
     backgroundColor: '#FAF7F0', borderRadius: 12, padding: 12, fontSize: 15,

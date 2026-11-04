@@ -11,9 +11,11 @@ export default function DiscoverScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
 
-  useEffect(() => {
-    loadMentors();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadMentors();
+    }, [])
+  );
 
   const loadMentors = async () => {
     setLoading(true);

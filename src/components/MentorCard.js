@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Avatar from './Avatar';
+import { hasReviews, ratingText } from '../utils/rating';
 
 export default function MentorCard({ mentor, onPress }) {
   const skills = (mentor.skillsToTeach || []).slice(0, 3);
@@ -44,17 +45,31 @@ export default function MentorCard({ mentor, onPress }) {
       </View>
 
       <View style={{ alignItems: 'flex-end' }}>
-        <View
-          style={{
-            flexDirection: 'row', alignItems: 'center', backgroundColor: '#FBF0DC',
-            paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
-          }}
-        >
-          <Ionicons name="star" size={12} color="#C97C1F" />
-          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#C97C1F', marginLeft: 3 }}>
-            {mentor.rating != null ? Number(mentor.rating).toFixed(1) : '-'}
-          </Text>
-        </View>
+        {hasReviews(mentor) ? (
+          // real rating: star + average
+          <View
+            style={{
+              flexDirection: 'row', alignItems: 'center', backgroundColor: '#FBF0DC',
+              paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
+            }}
+          >
+            <Ionicons name="star" size={12} color="#E8A33D" />
+            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#B7791F', marginLeft: 3 }}>
+              {ratingText(mentor)}
+            </Text>
+          </View>
+        ) : (
+          // nobody has reviewed this mentor yet
+          <View
+            style={{
+              flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9',
+              paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
+            }}
+          >
+            <Ionicons name="sparkles" size={12} color="#2D6A4F" />
+            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#2D6A4F', marginLeft: 3 }}>New</Text>
+          </View>
+        )}
         <Ionicons name="chevron-forward" size={18} color="#B9B2A3" style={{ marginTop: 14 }} />
       </View>
     </TouchableOpacity>

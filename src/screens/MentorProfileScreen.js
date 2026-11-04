@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, collection, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import Avatar from '../components/Avatar';
+import { hasReviews, ratingText } from '../utils/rating';
+import ReviewsSection from '../components/ReviewsSection';
 
 export default function MentorProfileScreen({ route }) {
   const { mentorId } = route.params;
@@ -39,6 +41,7 @@ export default function MentorProfileScreen({ route }) {
     }
   };
 
+  // has the current user already requested this skill from this mentor?
   const checkExistingRequest = async (skillName) => {
     if (!skillName) {
       setAlreadyRequested(false);
@@ -115,7 +118,21 @@ export default function MentorProfileScreen({ route }) {
     );
   }
 
-  const rating = mentor.rating != null ? Number(mentor.rating).toFixed(1) : '-';
+  // teaching details chosen by the mentor (or "Not specified" if they never set them)
+  const details = mentor.teachingDetails || {};
+  const availabilityText = (details.availability || []).join(', ') || 'Not specified';
+  const formatText = (details.format || []).join(' / ') || 'Not specified';
+  const sessionText = details.sessionLength ? `${details.sessionLength} mins` : 'Not specified';
+
+  // one line in the Teaching Details card
+  const detailRow = (icon, label, value) => (
+    <View style={styles.detailRow}>
+      <Ionicons name={icon} size={18} color="#2D6A4F" />
+      <Text style={styles.detailText}>
+        {label}: <Text style={{ fontWeight: '600' }}>{value}</Text>
+      </Text>
+    </View>
+  );
 
   return (
     <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
@@ -123,32 +140,35 @@ export default function MentorProfileScreen({ route }) {
       <View style={[styles.card, { alignItems: 'center' }]}>
         <Avatar name={mentor.displayName} size={80} />
         <Text style={styles.name}>{mentor.displayName}</Text>
-        <View style={styles.ratingPill}>
-          <Ionicons name="star" size={13} color="#E8A33D" />
-          <Text style={styles.ratingText}>{rating}</Text>
-          <Text style={styles.reviewsText}>({mentor.reviewsCount || 0} reviews)</Text>
-        </View>
+
+        {hasReviews(mentor) ? (
+          <View style={styles.ratingPill}>
+            <Ionicons name="star" size={13} color="#E8A33D" />
+            <Text style={styles.ratingText}>{ratingText(mentor)}</Text>
+            <Text style={styles.reviewsText}>
+              ({mentor.reviewsCount} {mentor.reviewsCount === 1 ? 'review' : 'reviews'})
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.ratingPill, { backgroundColor: '#E8F5E9' }]}>
+            <Ionicons name="sparkles" size={13} color="#2D6A4F" />
+            <Text style={[styles.ratingText, { color: '#2D6A4F' }]}>New mentor</Text>
+            <Text style={styles.reviewsText}>· No reviews yet</Text>
+          </View>
+        )}
+
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
           <Ionicons name="location-outline" size={14} color="#5F6368" />
           <Text style={styles.location}>{mentor.location || 'Bhutan'}</Text>
         </View>
       </View>
 
-      {/* teaching details (static, like Project-I) */}
+      {/* teaching details */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Teaching Details</Text>
-        <View style={styles.detailRow}>
-          <Ionicons name="calendar-outline" size={18} color="#2D6A4F" />
-          <Text style={styles.detailText}>Availability: Weekends</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Ionicons name="people-outline" size={18} color="#2D6A4F" />
-          <Text style={styles.detailText}>Format: In-person / Online</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Ionicons name="time-outline" size={18} color="#2D6A4F" />
-          <Text style={styles.detailText}>Session length: 60 mins</Text>
-        </View>
+        {detailRow('calendar-outline', 'Availability', availabilityText)}
+        {detailRow('people-outline', 'Format', formatText)}
+        {detailRow('time-outline', 'Session length', sessionText)}
       </View>
 
       <View style={styles.card}>
@@ -193,6 +213,9 @@ export default function MentorProfileScreen({ route }) {
         </View>
       </View>
 
+      {/* reviews this mentor has received */}
+      <ReviewsSection mentorId={mentorId} />
+
       <TouchableOpacity
         style={[styles.button, (alreadyRequested || sending) && styles.buttonDisabled]}
         onPress={handleRequestToExchange}
@@ -229,7 +252,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#1F456D', marginBottom: 10 },
   hint: { fontSize: 12, color: '#8D99AE', marginTop: -6, marginBottom: 10 },
   detailRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  detailText: { fontSize: 14, color: '#1A1A1A', marginLeft: 10 },
+  detailText: { fontSize: 14, color: '#1A1A1A', marginLeft: 10, flex: 1 },
   bio: { fontSize: 14, color: '#444', lineHeight: 21 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap' },
   skillChip: {

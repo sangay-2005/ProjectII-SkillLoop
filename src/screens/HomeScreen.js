@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Modal,
 } from 'react-native';
@@ -8,6 +8,8 @@ import { auth, db } from '../config/firebase';
 import ScreenHeader from '../components/ScreenHeader';
 import CategoryChips from '../components/CategoryChips';
 import MentorCard from '../components/MentorCard';
+import { ratingValue } from '../utils/rating';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function HomeScreen({ navigation }) {
   const [allMentors, setAllMentors] = useState([]);
@@ -22,9 +24,12 @@ export default function HomeScreen({ navigation }) {
   const [minRating, setMinRating] = useState(0);
   const [selectedLocation, setSelectedLocation] = useState('Any');
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // reload whenever this tab is opened, so new ratings show up
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const loadData = async () => {
     setLoading(true);
@@ -62,14 +67,14 @@ export default function HomeScreen({ navigation }) {
         !text ||
         (m.displayName || '').toLowerCase().includes(text) ||
         (m.skillsToTeach || []).some((s) => s.toLowerCase().includes(text));
-      const matchRating = (m.rating || 0) >= minRating;
+      const matchRating = ratingValue(m) >= minRating;
       const matchLocation = selectedLocation === 'Any' || m.location === selectedLocation;
       return matchCategory && matchText && matchRating && matchLocation;
     })
     .sort((a, b) =>
       sortBy === 'name'
         ? (a.displayName || '').localeCompare(b.displayName || '')
-        : (b.rating || 0) - (a.rating || 0)
+        : ratingValue(b) - ratingValue(a)
     );
 
   // "Recommended" shows the top 10 until the user searches or filters
@@ -102,7 +107,13 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScreenHeader small="Kuzu Zangpo," title={userName} subtitle="What would you like to learn today?">
+      <ScreenHeader
+        small="Kuzu Zangpo,"
+        title={userName}
+        subtitle="What would you like to learn today?"
+        rightIcon="chatbubbles-outline"
+        onRightPress={() => navigation.navigate('ChatList')}
+      >
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 18 }}>
           {/* search box */}
           <View

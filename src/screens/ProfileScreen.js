@@ -1,19 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import ScreenHeader from '../components/ScreenHeader';
 import Avatar from '../components/Avatar';
+import { ratingText } from '../utils/rating';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
 
   const loadProfile = async () => {
     try {
@@ -25,6 +23,13 @@ export default function ProfileScreen() {
       setLoading(false);
     }
   };
+
+  // reload every time this tab is opened, so edits show up straight away
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [])
+  );
 
   const handleLogout = () => {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
@@ -43,13 +48,15 @@ export default function ProfileScreen() {
     ]);
   };
 
+  // one number in the stats row
   const stat = (value, label) => (
     <View style={{ flex: 1, alignItems: 'center' }}>
-      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#C97C1F' }}>{value}</Text>
-      <Text style={{ fontSize: 12, color: '#7A7468', marginTop: 2 }}>{label}</Text>
+      <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E8A33D' }}>{value}</Text>
+      <Text style={{ fontSize: 12, color: '#5F6368', marginTop: 2 }}>{label}</Text>
     </View>
   );
 
+  // a list of skill chips
   const chips = (list, bg, fg) =>
     (list || []).map((skill) => (
       <View
@@ -65,7 +72,7 @@ export default function ProfileScreen() {
       <ScreenHeader title="My Profile" subtitle="How others see you on SkillLoop" />
 
       {loading ? (
-        <ActivityIndicator size="large" color="#C97C1F" style={{ marginTop: 30 }} />
+        <ActivityIndicator size="large" color="#E8A33D" style={{ marginTop: 30 }} />
       ) : (
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
           <View
@@ -79,10 +86,10 @@ export default function ProfileScreen() {
             <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#1F456D', marginTop: 12 }}>
               {profile?.displayName || 'Your name'}
             </Text>
-            <Text style={{ fontSize: 13, color: '#7A7468', marginTop: 2 }}>{auth.currentUser?.email}</Text>
+            <Text style={{ fontSize: 13, color: '#5F6368', marginTop: 2 }}>{auth.currentUser?.email}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
-              <Ionicons name="location-outline" size={14} color="#7A7468" />
-              <Text style={{ fontSize: 13, color: '#7A7468', marginLeft: 3 }}>{profile?.location || 'Bhutan'}</Text>
+              <Ionicons name="location-outline" size={14} color="#5F6368" />
+              <Text style={{ fontSize: 13, color: '#5F6368', marginLeft: 3 }}>{profile?.location || 'Bhutan'}</Text>
             </View>
             {profile?.bio ? (
               <Text style={{ fontSize: 14, color: '#444', textAlign: 'center', marginTop: 12, lineHeight: 20 }}>
@@ -90,10 +97,22 @@ export default function ProfileScreen() {
               </Text>
             ) : null}
 
+            {/* edit button */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('EditProfile')}
+              style={{
+                flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3E5F5',
+                paddingVertical: 8, paddingHorizontal: 18, borderRadius: 16, marginTop: 14,
+              }}
+            >
+              <Ionicons name="create-outline" size={16} color="#8E24AA" />
+              <Text style={{ color: '#8E24AA', fontWeight: 'bold', marginLeft: 6 }}>Edit Profile</Text>
+            </TouchableOpacity>
+
             <View style={{ flexDirection: 'row', marginTop: 18, width: '100%' }}>
               {stat((profile?.skillsToTeach || []).length, 'Teaching')}
               {stat((profile?.skillsToLearn || []).length, 'Learning')}
-              {stat(profile?.rating != null ? Number(profile.rating).toFixed(1) : '-', 'Rating')}
+              {stat(ratingText(profile), 'Rating')}
             </View>
           </View>
 
@@ -108,18 +127,18 @@ export default function ProfileScreen() {
             Skills I'm Learning
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {chips(profile?.skillsToLearn, '#FBF0DC', '#C97C1F')}
+            {chips(profile?.skillsToLearn, '#FBF0DC', '#B7791F')}
           </View>
 
           <TouchableOpacity
             onPress={handleLogout}
             style={{
               flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-              borderWidth: 1.5, borderColor: '#B3261E', borderRadius: 14, padding: 14, marginTop: 28,
+              borderWidth: 1.5, borderColor: '#D62828', borderRadius: 14, padding: 14, marginTop: 28,
             }}
           >
-            <Ionicons name="log-out-outline" size={20} color="#B3261E" />
-            <Text style={{ color: '#B3261E', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Logout</Text>
+            <Ionicons name="log-out-outline" size={20} color="#D62828" />
+            <Text style={{ color: '#D62828', fontWeight: 'bold', fontSize: 16, marginLeft: 8 }}>Logout</Text>
           </TouchableOpacity>
         </ScrollView>
       )}
