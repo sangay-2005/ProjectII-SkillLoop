@@ -1,4 +1,3 @@
-
 # SkillLoop - Learn. Share. Repeat.
 
 SkillLoop is a cross-platform skill-exchange mobile application developed using React Native (Expo) and Firebase. It connects people who want to learn new skills with people who are willing to share their knowledge.
@@ -165,6 +164,8 @@ src/config/firebase.js
 
 Ensure that the Firebase configuration matches the project setup.
 
+**Important:** Firebase configuration and Firestore security rules must be set up correctly before running the application.
+
 ### 5. Start the Application
 
 ```bash
@@ -245,4 +246,4 @@ Royal University of Bhutan
 
 ## GitHub Repository
 
-https://github.com/sangay-2005/ProjectII-SkillLoop
+[https://github.com/sangay-2005/ProjectII-SkillLoop](https://github.com/sangay-2005/ProjectII-SkillLoop)
