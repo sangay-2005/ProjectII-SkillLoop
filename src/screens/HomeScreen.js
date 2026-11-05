@@ -177,8 +177,6 @@ export default function HomeScreen({ navigation }) {
         small="Kuzu Zangpo,"
         title={userName}
         subtitle="What would you like to learn today?"
-        rightIcon="chatbubbles-outline"
-        onRightPress={() => navigation.navigate('ChatList')}
       >
         <View
           style={{

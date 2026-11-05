@@ -1,25 +1,44 @@
+
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import {
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+} from 'firebase/auth';
 import { auth } from '../../config/firebase';
-import AuthHero from '../../components/AuthHero';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Missing info', 'Please enter both email and password.');
+    if (!email.trim() || !password) {
+      Alert.alert('Missing information', 'Please enter both email and password.');
       return;
     }
+
     setLoading(true);
+
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      // AppNavigator listens for the login and switches screens automatically
     } catch (error) {
       Alert.alert('Login failed', error.message);
     } finally {
@@ -27,75 +46,341 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert(
+        'Email required',
+        'Please enter your registered email address first.'
+      );
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+
+      Alert.alert(
+        'Reset email sent',
+        'A password reset link has been sent to your email address. Please check your inbox.'
+      );
+    } catch (error) {
+      Alert.alert('Unable to send reset email', error.message);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-      <AuthHero />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FAF7F0" />
 
-      <View style={styles.card}>
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>Log in to reconnect with your community</Text>
-
-        <View style={styles.inputRow}>
-          <Ionicons name="mail-outline" size={20} color="#1F456D" />
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#9A9384"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-        </View>
-
-        <View style={styles.inputRow}>
-          <Ionicons name="lock-closed-outline" size={20} color="#1F456D" />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#9A9384"
-            secureTextEntry={!showPassword}
-            value={password}
-            onChangeText={setPassword}
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#7A7468" />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          showsVerticalScrollIndicator={false}
+        >
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={21} color="#1F456D" />
           </TouchableOpacity>
-        </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? 'Logging in...' : 'Login'}</Text>
-          {!loading && <Ionicons name="arrow-forward" size={18} color="#E8C38A" style={{ marginLeft: 8 }} />}
-        </TouchableOpacity>
+          <View style={styles.header}>
+            <Image
+              source={require('../../../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
 
-        <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-          <Text style={styles.link}>
-            Don't have an account? <Text style={styles.linkBold}>Sign Up</Text>
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+            <View style={styles.welcomeTag}>
+              <View style={styles.tagDot} />
+              <Text style={styles.tagText}>YOUR LEARNING COMMUNITY</Text>
+            </View>
+
+            <Text style={styles.title}>Welcome back.</Text>
+
+            <Text style={styles.subtitle}>
+              Pick up where you left off. Your next learning journey starts here.
+            </Text>
+          </View>
+
+          <View style={styles.form}>
+            <Text style={styles.sectionTitle}>Sign in to your account</Text>
+
+            <Text style={styles.label}>Email address</Text>
+
+            <View style={styles.inputRow}>
+              <Ionicons name="mail-outline" size={20} color="#2D6A4F" />
+
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your email"
+                placeholderTextColor="#9BA39D"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
+
+            <Text style={styles.label}>Password</Text>
+
+            <View style={styles.inputRow}>
+              <Ionicons name="lock-closed-outline" size={20} color="#2D6A4F" />
+
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your password"
+                placeholderTextColor="#9BA39D"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#718096"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.forgotButton}
+              onPress={handleForgotPassword}
+              disabled={resetLoading}
+              activeOpacity={0.7}
+            >
+              {resetLoading ? (
+                <ActivityIndicator size="small" color="#2D6A4F" />
+              ) : (
+                <Text style={styles.forgotText}>Forgot Password?</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={handleLogin}
+              disabled={loading || resetLoading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <>
+                  <Text style={styles.loginButtonText}>Log In</Text>
+                  <Ionicons name="arrow-forward" size={19} color="#F2C36B" />
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>New to SkillLoop?</Text>
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Signup')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.signupLink}>Create an account</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff', marginHorizontal: 20, marginTop: -40, borderRadius: 24, padding: 22,
-    shadowColor: '#1F456D', shadowOpacity: 0.12, shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 }, elevation: 6,
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FAF7F0',
   },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#1F456D' },
-  subtitle: { fontSize: 13, color: '#7A7468', marginTop: 4, marginBottom: 20 },
+
+  flex: {
+    flex: 1,
+  },
+
+  scrollContent: {
+    flexGrow: 1,
+    backgroundColor: '#FAF7F0',
+    paddingHorizontal: 27,
+    paddingTop: 20,
+    paddingBottom: 28,
+  },
+
+  backButton: {
+    width: 43,
+    height: 43,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E9EDE6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 17,
+  },
+
+  header: {
+    alignItems: 'center',
+    marginBottom: 29,
+  },
+
+  logo: {
+    width: 105,
+    height: 85,
+    marginBottom: 10,
+  },
+
+  welcomeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8EDE5',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 13,
+    gap: 7,
+  },
+
+  tagDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#2D6A4F',
+  },
+
+  tagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    color: '#2D6A4F',
+  },
+
+  title: {
+    fontSize: 29,
+    lineHeight: 37,
+    fontWeight: '800',
+    color: '#1F456D',
+    textAlign: 'center',
+  },
+
+  subtitle: {
+    fontSize: 13,
+    lineHeight: 21,
+    color: '#68717A',
+    marginTop: 8,
+    textAlign: 'center',
+    maxWidth: 295,
+  },
+
+  form: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 23,
+    padding: 21,
+    borderWidth: 1,
+    borderColor: '#EAECE5',
+  },
+
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1F456D',
+    marginBottom: 22,
+  },
+
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#405E50',
+    marginBottom: 9,
+  },
+
   inputRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F6F1E5',
-    borderRadius: 14, paddingHorizontal: 14, marginBottom: 12,
+    minHeight: 55,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9F5',
+    borderWidth: 1,
+    borderColor: '#E5EAE1',
+    borderRadius: 13,
+    paddingHorizontal: 14,
+    marginBottom: 19,
   },
-  input: { flex: 1, paddingVertical: 14, marginLeft: 10, fontSize: 15, color: '#2A2620' },
-  button: {
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#1F456D', padding: 16, borderRadius: 14, marginTop: 8,
+
+  input: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1A1A1A',
+    paddingVertical: 14,
+    marginLeft: 11,
   },
-  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  link: { textAlign: 'center', marginTop: 20, color: '#7A7468' },
-  linkBold: { color: '#C97C1F', fontWeight: 'bold' },
+
+  eyeButton: {
+    padding: 5,
+  },
+
+  forgotButton: {
+    alignSelf: 'flex-end',
+    marginTop: -9,
+    marginBottom: 18,
+    paddingVertical: 4,
+  },
+
+  forgotText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2D6A4F',
+  },
+
+  loginButton: {
+    height: 55,
+    borderRadius: 14,
+    backgroundColor: '#1F456D',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+
+  loginButtonText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 25,
+  },
+
+  footerText: {
+    fontSize: 13,
+    color: '#68717A',
+  },
+
+  signupLink: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#2D6A4F',
+    marginLeft: 5,
+  },
 });

@@ -1,99 +1,398 @@
-import { View, Text, Image, TouchableOpacity, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import Svg, { Path } from 'react-native-svg';
-import Motif from '../../components/Motif';
-import OnboardingHero from '../../components/OnboardingHero';
 
-const FEATURES = [
-  {
-    label: 'Connect', color: '#2D6A4F', bg: '#E8F5E9',
-    path: 'M16,11c1.66,0 2.99,-1.34 2.99,-3S17.66,5 16,5s-3,1.34 -3,3S14.34,11 16,11zM8,11c1.66,0 2.99,-1.34 2.99,-3S9.66,5 8,5S5,6.34 5,8S6.34,11 8,11zM8,13c-2.33,0 -7,1.17 -7,3.5V19h14v-2.5C15,14.17 10.33,13 8,13z',
-  },
-  {
-    label: 'Learn', color: '#E8A33D', bg: '#FBF0DC',
-    path: 'M18,2H6C4.9,2 4,2.9 4,4v16c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V4C20,2.9 19.1,2 18,2zM18,20H6V4h5v8l2.5,-1.5L16,12V4h2V20z',
-  },
-  {
-    label: 'Share', color: '#E8A33D', bg: '#FBF0DC',
-    path: 'M11,9H9V2H7V9H5l3,3L11,9z M17,7v2h2v10H5v-2H3v2c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2V9C21,7.9 20.1,7 19,7H17z',
-  },
-  {
-    label: 'Grow', color: '#2D6A4F', bg: '#E8F5E9',
-    path: 'M7,14l-1.41,1.41L9,18.83l12,-12L19.59,5.42L9,16L7,14z M3,11h2v8H3V11z M10,11h2v8h-2V11z M17,11h2v8h-2V11z',
-  },
-];
+import React from 'react';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+  StatusBar,
+  useWindowDimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function WelcomeScreen({ navigation }) {
+  const { height, width } = useWindowDimensions();
+  const compact = height < 750;
+  const narrow = width < 380;
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#FAF7F0' }}>
-      {/* soft accent circles, like Project-I */}
-      <View
-        style={{
-          position: 'absolute', top: -60, right: -60, width: 200, height: 200,
-          borderRadius: 100, backgroundColor: 'rgba(232,163,61,0.10)',
-        }}
-      />
-      <View
-        style={{
-          position: 'absolute', bottom: -50, left: -50, width: 180, height: 180,
-          borderRadius: 90, backgroundColor: 'rgba(45,106,79,0.08)',
-        }}
-      />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FAF7F0" />
 
-      <ScrollView contentContainerStyle={{ alignItems: 'center', paddingTop: 56, paddingBottom: 40, paddingHorizontal: 24 }}>
-        <Image source={require('../../../assets/logo.png')} style={{ width: 150, height: 137 }} resizeMode="contain" />
-
-        <View style={{ marginVertical: 14 }}>
-          <Motif width={60} />
-        </View>
-
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#1F456D', textAlign: 'center', lineHeight: 32 }}>
-          Share what you know{'\n'}Learn from your community
-        </Text>
-
-        <View style={{ marginVertical: 16 }}>
-          <OnboardingHero size={170} />
-        </View>
-
-        <Text style={{ fontSize: 14, color: '#5F6368', textAlign: 'center', lineHeight: 21, marginBottom: 20 }}>
-          Connect with people across Bhutan to exchange skills, knowledge and experiences.
-        </Text>
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 28 }}>
-          {FEATURES.map((f) => (
-            <View key={f.label} style={{ alignItems: 'center', flex: 1 }}>
-              <View
-                style={{
-                  width: 48, height: 48, borderRadius: 24, backgroundColor: f.bg,
-                  justifyContent: 'center', alignItems: 'center',
-                }}
-              >
-                <Svg width={24} height={24} viewBox="0 0 24 24">
-                  <Path d={f.path} fill={f.color} />
-                </Svg>
-              </View>
-              <Text style={{ fontSize: 12, color: '#1A1A1A', fontWeight: '600', marginTop: 6 }}>{f.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Signup')}
-          style={{
-            flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-            backgroundColor: '#1F456D', paddingVertical: 16, borderRadius: 14, width: '100%',
-          }}
-        >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Get Started</Text>
-          <Ionicons name="arrow-forward" size={18} color="#E8A33D" style={{ marginLeft: 8 }} />
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => navigation.navigate('Login')} style={{ marginTop: 18 }}>
-          <Text style={{ color: '#5F6368' }}>
-            Already have an account? <Text style={{ color: '#E8A33D', fontWeight: 'bold' }}>Log In</Text>
+      <View style={styles.container}>
+        <View style={styles.brandSection}>
+          <Image
+            source={require('../../../assets/logo.png')}
+            style={compact ? styles.logoSmall : styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.brandSubtitle}>
+            A community built around sharing skills
           </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
+        </View>
+
+        <View style={styles.mainSection}>
+          <View style={styles.hero}>
+            <View style={styles.heroCircleLarge} />
+            <View style={styles.heroCircleSmall} />
+
+            <View style={styles.heroTopLabel}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.heroTopText}>LEARN TOGETHER</Text>
+            </View>
+
+            <View style={styles.illustration}>
+              <View style={styles.bookCircle}>
+                <Ionicons name="book" size={38} color="#FFFFFF" />
+              </View>
+
+              <View style={styles.personCircle}>
+                <Ionicons name="person" size={34} color="#1F456D" />
+              </View>
+
+              <View style={styles.sparkleOne}>
+                <Ionicons name="sparkles" size={20} color="#D9902F" />
+              </View>
+
+              <View style={styles.sparkleTwo}>
+                <Ionicons name="bulb" size={22} color="#2D6A4F" />
+              </View>
+            </View>
+
+            <View style={styles.heroBottomLabel}>
+              <Ionicons name="heart" size={14} color="#2D6A4F" />
+              <Text style={styles.heroBottomText}>
+                Skills are better when shared
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.messageSection}>
+            <Text style={[styles.heading, narrow && styles.headingSmall]}>
+              Learn something new.
+            </Text>
+
+            <Text style={[styles.headingGreen, narrow && styles.headingSmall]}>
+              Share what you know.
+            </Text>
+
+            <Text style={styles.description}>
+              Connect with people across Bhutan, exchange knowledge
+              and grow together through shared skills.
+            </Text>
+          </View>
+
+          <View style={styles.features}>
+            <View style={styles.feature}>
+              <View style={styles.featureIconGreen}>
+                <Ionicons name="people-outline" size={17} color="#2D6A4F" />
+              </View>
+              <Text style={styles.featureText}>Connect</Text>
+            </View>
+
+            <View style={styles.feature}>
+              <View style={styles.featureIconGold}>
+                <Ionicons name="book-outline" size={17} color="#C17B20" />
+              </View>
+              <Text style={styles.featureText}>Learn</Text>
+            </View>
+
+            <View style={styles.feature}>
+              <View style={styles.featureIconGreen}>
+                <Ionicons name="trending-up-outline" size={17} color="#2D6A4F" />
+              </View>
+              <Text style={styles.featureText}>Grow</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.bottomSection}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={styles.primaryButton}
+            onPress={() => navigation.navigate('Signup')}
+          >
+            <Text style={styles.primaryButtonText}>Get Started</Text>
+            <Ionicons name="arrow-forward" size={20} color="#E8A33D" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={styles.loginButton}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.loginText}>
+              Already have an account?
+            </Text>
+            <Text style={styles.loginLink}> Log In</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FAF7F0',
+  },
+
+  container: {
+    flex: 1,
+    backgroundColor: '#FAF7F0',
+    paddingHorizontal: 26,
+    paddingTop: 16,
+    paddingBottom: 18,
+  },
+
+  brandSection: {
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+
+  logo: {
+    width: 130,
+    height: 105,
+  },
+
+  logoSmall: {
+    width: 110,
+    height: 85,
+  },
+
+  brandSubtitle: {
+    fontSize: 12,
+    color: '#68717A',
+    marginTop: 5,
+    letterSpacing: 0.2,
+  },
+
+  mainSection: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  hero: {
+    width: '100%',
+    height: 190,
+    borderRadius: 28,
+    backgroundColor: '#E8EDE5',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+    marginBottom: 25,
+  },
+
+  heroCircleLarge: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: '#DCE7D8',
+    top: 22,
+    right: -45,
+  },
+
+  heroCircleSmall: {
+    position: 'absolute',
+    width: 105,
+    height: 105,
+    borderRadius: 53,
+    backgroundColor: '#F6E9CF',
+    bottom: -35,
+    left: -20,
+  },
+
+  heroTopLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginLeft: 19,
+    gap: 7,
+  },
+
+  onlineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#2D6A4F',
+  },
+
+  heroTopText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    color: '#2D6A4F',
+  },
+
+  illustration: {
+    width: 150,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  bookCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 25,
+    backgroundColor: '#2D6A4F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '-8deg' }],
+  },
+
+  personCircle: {
+    position: 'absolute',
+    width: 43,
+    height: 43,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    right: 7,
+    bottom: 0,
+    borderWidth: 3,
+    borderColor: '#E8EDE5',
+  },
+
+  sparkleOne: {
+    position: 'absolute',
+    top: 0,
+    right: 13,
+  },
+
+  sparkleTwo: {
+    position: 'absolute',
+    left: 4,
+    bottom: 1,
+  },
+
+  heroBottomLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+
+  heroBottomText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#476453',
+  },
+
+  messageSection: {
+    alignItems: 'center',
+  },
+
+  heading: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1F456D',
+    textAlign: 'center',
+  },
+
+  headingSmall: {
+    fontSize: 21,
+  },
+
+  headingGreen: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#2D6A4F',
+    textAlign: 'center',
+    marginTop: 3,
+  },
+
+  description: {
+    fontSize: 13,
+    lineHeight: 21,
+    color: '#68717A',
+    textAlign: 'center',
+    marginTop: 12,
+    paddingHorizontal: 5,
+  },
+
+  features: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 25,
+    marginTop: 23,
+  },
+
+  feature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+
+  featureIconGreen: {
+    width: 29,
+    height: 29,
+    borderRadius: 10,
+    backgroundColor: '#E5EEE3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  featureIconGold: {
+    width: 29,
+    height: 29,
+    borderRadius: 10,
+    backgroundColor: '#F8ECD8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  featureText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1F456D',
+  },
+
+  bottomSection: {
+    width: '100%',
+    alignItems: 'center',
+  },
+
+  primaryButton: {
+    height: 56,
+    width: '100%',
+    backgroundColor: '#1F456D',
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  loginButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+    paddingVertical: 5,
+  },
+
+  loginText: {
+    fontSize: 13,
+    color: '#68717A',
+  },
+
+  loginLink: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#D9902F',
+  },
+});

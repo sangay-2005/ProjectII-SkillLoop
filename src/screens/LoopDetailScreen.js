@@ -29,17 +29,19 @@ import { auth, db } from '../config/firebase';
 import ProgressRing from '../components/ProgressRing';
 import Avatar from '../components/Avatar';
 import ReviewCard from '../components/ReviewCard';
-import { loadWithCache, loadCache, saveCache } from '../utils/cache';
+import {
+  loadWithCache,
+  loadCache,
+  saveCache,
+} from '../utils/cache';
 import { useOnline, warnOffline } from '../utils/connection';
 
-// the checklist stages, and the progress % needed to tick each one
 const MILESTONES = [
   { label: 'Basics of Skill', needed: 10 },
   { label: 'Intermediate Level Mastery', needed: 50 },
   { label: 'Final Project Completion', needed: 100 },
 ];
 
-// counts how many days in a row (ending today or yesterday) have at least one session
 const calculateStreak = (entries) => {
   const days = new Set(
     entries.map((e) => new Date(e.timestamp).toDateString())
@@ -67,6 +69,35 @@ const formatDate = (timestamp) =>
     year: 'numeric',
   });
 
+const formatSessionDate = (dateString) => {
+  if (!dateString) return 'Date unavailable';
+
+  const date = new Date(`${dateString}T00:00:00`);
+
+  return date.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'confirmed':
+      return '#2D6A4F';
+    case 'pending':
+      return '#B7791F';
+    case 'completed':
+      return '#1F456D';
+    case 'cancelled':
+    case 'declined':
+      return '#D62828';
+    default:
+      return '#5F6368';
+  }
+};
+
 export default function LoopDetailScreen({ route, navigation }) {
   const { requestId } = route.params;
   const myUid = auth.currentUser.uid;
@@ -75,23 +106,27 @@ export default function LoopDetailScreen({ route, navigation }) {
   const [loop, setLoop] = useState(null);
   const [partnerEmail, setPartnerEmail] = useState('');
   const [entries, setEntries] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
 
-  // add / edit dialog
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // load the Loop details and the partner's email
-  // (the saved copy when offline)
+  // Load Loop details and partner email.
   useEffect(() => {
+    let active = true;
+
     const loadLoop = async () => {
       const data = await loadWithCache(
         `${myUid}_loop_${requestId}`,
         async () => {
-          const snap = await getDoc(doc(db, 'requests', requestId));
+          const snap = await getDoc(
+            doc(db, 'requests', requestId)
+          );
 
           if (!snap.exists()) return null;
 
@@ -114,6 +149,8 @@ export default function LoopDetailScreen({ route, navigation }) {
           };
         }
       );
+
+      if (!active) return;
 
       if (!data) {
         Alert.alert(
@@ -139,10 +176,13 @@ export default function LoopDetailScreen({ route, navigation }) {
     };
 
     loadLoop();
+
+    return () => {
+      active = false;
+    };
   }, [requestId, online]);
 
-  // journal: real-time listener when online,
-  // the saved copy when offline
+  // Practice Journal listener and offline cache.
   useEffect(() => {
     const entriesKey = `${myUid}_entries_${requestId}`;
 
@@ -172,9 +212,64 @@ export default function LoopDetailScreen({ route, navigation }) {
         saveCache(entriesKey, list);
         setLoading(false);
       },
-      (error) => {
+      async (error) => {
         console.log('Journal listener error:', error.message);
+
+        const saved = await loadCache(entriesKey);
+        if (saved) setEntries(saved);
+
         setLoading(false);
+      }
+    );
+
+    return unsubscribe;
+  }, [requestId, online]);
+
+  // Scheduled Teaching Sessions listener and offline cache.
+  useEffect(() => {
+    const sessionsKey = `${myUid}_sessions_${requestId}`;
+
+    if (!online) {
+      loadCache(sessionsKey).then((saved) => {
+        if (saved) setSessions(saved);
+        setSessionsLoading(false);
+      });
+
+      return undefined;
+    }
+
+    const sessionsRef = collection(
+      db,
+      'requests',
+      requestId,
+      'sessions'
+    );
+
+    const unsubscribe = onSnapshot(
+      sessionsRef,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => ({
+          ...d.data(),
+          id: d.id,
+        }));
+
+        list.sort((a, b) => {
+          const dateA = `${a.sessionDate || ''} ${a.startTime || ''}`;
+          const dateB = `${b.sessionDate || ''} ${b.startTime || ''}`;
+          return dateA.localeCompare(dateB);
+        });
+
+        setSessions(list);
+        saveCache(sessionsKey, list);
+        setSessionsLoading(false);
+      },
+      async (error) => {
+        console.log('Sessions listener error:', error.message);
+
+        const saved = await loadCache(sessionsKey);
+        if (saved) setSessions(saved);
+
+        setSessionsLoading(false);
       }
     );
 
@@ -192,6 +287,33 @@ export default function LoopDetailScreen({ route, navigation }) {
   const sessionCount = entries.length;
   const percent = Math.min(sessionCount * 10, 100);
   const streak = calculateStreak(entries);
+
+  const journalTitle = iAmMentor
+    ? 'Teaching Journal'
+    : 'Learning Journal';
+
+  const activityTitle = iAmMentor
+    ? 'Teaching sessions completed'
+    : 'Learning sessions completed';
+
+  const openSchedule = () => {
+    if (!online) {
+      warnOffline();
+      return;
+    }
+
+    navigation.navigate('ScheduleSession', {
+      requestId,
+    });
+  };
+
+  // Open the selected scheduled session.
+  const openSessionDetail = (session) => {
+    navigation.navigate('SessionDetail', {
+      requestId,
+      sessionId: session.id,
+    });
+  };
 
   const openAdd = () => {
     if (!online) {
@@ -232,7 +354,6 @@ export default function LoopDetailScreen({ route, navigation }) {
 
     try {
       if (editing) {
-        // update an existing entry
         await updateDoc(
           doc(db, 'requests', requestId, 'progress', editing.id),
           {
@@ -241,7 +362,6 @@ export default function LoopDetailScreen({ route, navigation }) {
           }
         );
       } else {
-        // create a new entry
         const ref = doc(
           collection(db, 'requests', requestId, 'progress')
         );
@@ -271,7 +391,7 @@ export default function LoopDetailScreen({ route, navigation }) {
 
     Alert.alert(
       'Delete Log?',
-      'Are you sure you want to delete this session entry?',
+      'Are you sure you want to delete this journal entry?',
       [
         {
           text: 'Cancel',
@@ -294,21 +414,31 @@ export default function LoopDetailScreen({ route, navigation }) {
     );
   };
 
-  // everything above the journal list: summary card, milestones and review
+  // Header containing journey, milestones, sessions and review.
   const header = (
     <View>
+      {/* Journey summary */}
       <View style={styles.card}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <ProgressRing
-            percent={percent}
-            size={88}
-            strokeWidth={9}
-          />
+          {iAmMentor ? (
+            <View style={styles.mentorIcon}>
+              <Ionicons
+                name="easel-outline"
+                size={38}
+                color="#2D6A4F"
+              />
+            </View>
+          ) : (
+            <ProgressRing
+              percent={percent}
+              size={88}
+              strokeWidth={9}
+            />
+          )}
 
           <View style={{ flex: 1, marginLeft: 16 }}>
             <Text style={styles.bigText}>
-              {sessionCount}{' '}
-              {sessionCount === 1 ? 'session' : 'sessions'} completed
+              {sessionCount} {activityTitle}
             </Text>
 
             <View
@@ -327,45 +457,30 @@ export default function LoopDetailScreen({ route, navigation }) {
             {loop && (
               <View style={styles.rolePill}>
                 <Ionicons
-                  name={
-                    iAmMentor
-                      ? 'easel-outline'
-                      : 'school-outline'
-                  }
+                  name={iAmMentor ? 'easel-outline' : 'school-outline'}
                   size={13}
                   color="#2D6A4F"
                 />
 
                 <Text style={styles.roleText}>
-                  {iAmMentor ? 'Teaching' : 'Learning'}{' '}
-                  {loop.skillName}
+                  {iAmMentor ? 'Teaching' : 'Learning'} {loop.skillName}
                 </Text>
               </View>
             )}
           </View>
         </View>
 
-        {/* partner + message button */}
+        {/* Partner and message button */}
         {loop && (
           <View style={styles.partnerRow}>
             <Avatar name={partnerName} size={36} />
 
             <View style={{ marginLeft: 10, flex: 1 }}>
-              <Text
-                style={{
-                  fontWeight: 'bold',
-                  color: '#1F456D',
-                }}
-              >
+              <Text style={styles.partnerName}>
                 {partnerName}
               </Text>
 
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: '#5F6368',
-                }}
-              >
+              <Text style={styles.partnerEmail}>
                 {partnerEmail || 'Email unavailable'}
               </Text>
             </View>
@@ -391,44 +506,42 @@ export default function LoopDetailScreen({ route, navigation }) {
         )}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>
-          Learning Milestones
-        </Text>
+      {/* Learning milestones: learners only */}
+      {!iAmMentor && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>
+            Learning Milestones
+          </Text>
 
-        {MILESTONES.map((m) => {
-          const done = percent >= m.needed;
+          {MILESTONES.map((m) => {
+            const done = percent >= m.needed;
 
-          return (
-            <View
-              key={m.label}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                marginBottom: 10,
-              }}
-            >
-              <Ionicons
-                name={done ? 'checkbox' : 'square-outline'}
-                size={22}
-                color={done ? '#2D6A4F' : '#8D99AE'}
-              />
-
-              <Text
-                style={{
-                  marginLeft: 10,
-                  fontSize: 14,
-                  color: done ? '#1A1A1A' : '#8D99AE',
-                }}
+            return (
+              <View
+                key={m.label}
+                style={styles.milestoneRow}
               >
-                {m.label}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
+                <Ionicons
+                  name={done ? 'checkbox' : 'square-outline'}
+                  size={22}
+                  color={done ? '#2D6A4F' : '#8D99AE'}
+                />
 
-      {/* learners can rate their mentor */}
+                <Text
+                  style={[
+                    styles.milestoneText,
+                    { color: done ? '#1A1A1A' : '#8D99AE' },
+                  ]}
+                >
+                  {m.label}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Learners can review their mentor */}
       {loop && !iAmMentor && (
         <ReviewCard
           loop={loop}
@@ -437,13 +550,143 @@ export default function LoopDetailScreen({ route, navigation }) {
         />
       )}
 
-      <Text
-        style={[
-          styles.sectionTitle,
-          { marginLeft: 20, marginBottom: 10 },
-        ]}
-      >
-        Practice Journal
+      {/* Scheduled Teaching Sessions */}
+      <View style={styles.card}>
+        <View style={styles.sessionHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionTitle}>
+              Teaching Sessions
+            </Text>
+
+            <Text style={styles.sessionSubtitle}>
+              Plan and manage your meetings
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.scheduleButton}
+            onPress={openSchedule}
+          >
+            <Ionicons name="add" size={18} color="#FFFFFF" />
+            <Text style={styles.scheduleButtonText}>
+              Schedule
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {sessionsLoading ? (
+          <ActivityIndicator
+            size="small"
+            color="#E8A33D"
+            style={{ marginTop: 15 }}
+          />
+        ) : sessions.length === 0 ? (
+          <View style={styles.emptySessions}>
+            <Ionicons
+              name="calendar-outline"
+              size={32}
+              color="#E8A33D"
+            />
+
+            <Text style={styles.emptySessionText}>
+              No teaching sessions scheduled yet.
+            </Text>
+
+            <Text style={styles.emptySessionHint}>
+              Schedule a session with your Loop partner.
+            </Text>
+          </View>
+        ) : (
+          sessions.map((session) => (
+            <TouchableOpacity
+              key={session.id}
+              style={styles.sessionCard}
+              activeOpacity={0.75}
+              onPress={() => openSessionDetail(session)}
+            >
+              <View style={styles.sessionTopRow}>
+                <Text style={styles.sessionTitle}>
+                  {session.topic || 'Teaching Session'}
+                </Text>
+
+                <View
+                  style={[
+                    styles.statusPill,
+                    {
+                      backgroundColor:
+                        `${getStatusColor(session.status)}18`,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusText,
+                      { color: getStatusColor(session.status) },
+                    ]}
+                  >
+                    {session.status || 'pending'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.sessionInfoRow}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={15}
+                  color="#5F6368"
+                />
+                <Text style={styles.sessionInfo}>
+                  {formatSessionDate(session.sessionDate)}
+                </Text>
+              </View>
+
+              <View style={styles.sessionInfoRow}>
+                <Ionicons
+                  name="time-outline"
+                  size={15}
+                  color="#5F6368"
+                />
+                <Text style={styles.sessionInfo}>
+                  {session.startTime || 'Time unavailable'}
+                  {'  •  '}
+                  {session.durationMinutes || 0} minutes
+                </Text>
+              </View>
+
+              <View style={styles.sessionInfoRow}>
+                <Ionicons
+                  name={
+                    session.mode === 'online'
+                      ? 'videocam-outline'
+                      : 'location-outline'
+                  }
+                  size={15}
+                  color="#5F6368"
+                />
+                <Text style={styles.sessionInfo}>
+                  {session.mode === 'online'
+                    ? `Online${session.platform ? ` • ${session.platform}` : ''}`
+                    : `In-person${session.locationName ? ` • ${session.locationName}` : ''}`}
+                </Text>
+              </View>
+
+              <View style={styles.tapSessionRow}>
+                <Text style={styles.tapSessionText}>
+                  Tap to view session details
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color="#1F456D"
+                />
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.journalHeading}>
+        {journalTitle}
       </Text>
     </View>
   );
@@ -505,35 +748,23 @@ export default function LoopDetailScreen({ route, navigation }) {
               style={{ marginTop: 20 }}
             />
           ) : (
-            <View
-              style={{
-                alignItems: 'center',
-                padding: 30,
-              }}
-            >
+            <View style={styles.emptyJournal}>
               <Ionicons
                 name="journal-outline"
                 size={44}
                 color="#E8A33D"
               />
 
-              <Text
-                style={{
-                  color: '#5F6368',
-                  textAlign: 'center',
-                  marginTop: 10,
-                  lineHeight: 20,
-                }}
-              >
-                No sessions logged yet. After you meet your
-                partner, tap + to record what you covered.
+              <Text style={styles.emptyJournalText}>
+                No entries logged yet. After your session,
+                tap + to record what you covered.
               </Text>
             </View>
           )
         }
       />
 
-      {/* add session button */}
+      {/* Add journal entry button */}
       <TouchableOpacity
         style={styles.fab}
         onPress={openAdd}
@@ -541,7 +772,7 @@ export default function LoopDetailScreen({ route, navigation }) {
         <Ionicons name="add" size={30} color="#1F456D" />
       </TouchableOpacity>
 
-      {/* add / edit dialog */}
+      {/* Add / edit journal dialog */}
       <Modal
         visible={modalVisible}
         transparent
@@ -555,7 +786,7 @@ export default function LoopDetailScreen({ route, navigation }) {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
               {editing
-                ? 'Edit Session'
+                ? 'Edit Journal Entry'
                 : iAmMentor
                   ? 'Log Teaching Session'
                   : 'Log Learning Session'}
@@ -585,23 +816,12 @@ export default function LoopDetailScreen({ route, navigation }) {
               onChangeText={setDescription}
             />
 
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'flex-end',
-                marginTop: 8,
-              }}
-            >
+            <View style={styles.modalActions}>
               <TouchableOpacity
                 onPress={() => setModalVisible(false)}
                 style={styles.modalCancel}
               >
-                <Text
-                  style={{
-                    color: '#5F6368',
-                    fontWeight: '600',
-                  }}
-                >
+                <Text style={styles.cancelText}>
                   Cancel
                 </Text>
               </TouchableOpacity>
@@ -611,12 +831,7 @@ export default function LoopDetailScreen({ route, navigation }) {
                 disabled={saving}
                 style={styles.modalSave}
               >
-                <Text
-                  style={{
-                    color: '#fff',
-                    fontWeight: 'bold',
-                  }}
-                >
+                <Text style={styles.saveText}>
                   {saving
                     ? 'Saving...'
                     : editing
@@ -650,6 +865,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1F456D',
+  },
+
+  mentorIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   streakText: {
@@ -686,6 +910,16 @@ const styles = StyleSheet.create({
     borderTopColor: '#EFE7D6',
   },
 
+  partnerName: {
+    fontWeight: 'bold',
+    color: '#1F456D',
+  },
+
+  partnerEmail: {
+    fontSize: 12,
+    color: '#5F6368',
+  },
+
   messageButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -708,6 +942,136 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1F456D',
     marginBottom: 12,
+  },
+
+  milestoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  milestoneText: {
+    marginLeft: 10,
+    fontSize: 14,
+  },
+
+  sessionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  sessionSubtitle: {
+    fontSize: 12,
+    color: '#8D99AE',
+    marginTop: -7,
+  },
+
+  scheduleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1F456D',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+
+  scheduleButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+
+  emptySessions: {
+    alignItems: 'center',
+    paddingVertical: 22,
+  },
+
+  emptySessionText: {
+    color: '#5F6368',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+
+  emptySessionHint: {
+    color: '#8D99AE',
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+
+  sessionCard: {
+    backgroundColor: '#FAF7F0',
+    borderRadius: 14,
+    padding: 13,
+    marginTop: 10,
+  },
+
+  sessionTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+
+  sessionTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F456D',
+    marginRight: 8,
+  },
+
+  statusPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'capitalize',
+  },
+
+  sessionInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+
+  sessionInfo: {
+    fontSize: 12,
+    color: '#5F6368',
+    marginLeft: 7,
+    flex: 1,
+  },
+
+  tapSessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: '#E5DED0',
+    marginTop: 12,
+    paddingTop: 9,
+  },
+
+  tapSessionText: {
+    color: '#1F456D',
+    fontSize: 11,
+    fontWeight: '600',
+    marginRight: 4,
+  },
+
+  journalHeading: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F456D',
+    marginLeft: 20,
+    marginBottom: 10,
   },
 
   entryCard: {
@@ -746,6 +1110,18 @@ const styles = StyleSheet.create({
   iconButton: {
     padding: 6,
     marginLeft: 2,
+  },
+
+  emptyJournal: {
+    alignItems: 'center',
+    padding: 30,
+  },
+
+  emptyJournalText: {
+    color: '#5F6368',
+    textAlign: 'center',
+    marginTop: 10,
+    lineHeight: 20,
   },
 
   fab: {
@@ -794,9 +1170,20 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+  },
+
   modalCancel: {
     paddingVertical: 10,
     paddingHorizontal: 16,
+  },
+
+  cancelText: {
+    color: '#5F6368',
+    fontWeight: '600',
   },
 
   modalSave: {
@@ -804,5 +1191,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 22,
     borderRadius: 12,
+  },
+
+  saveText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });

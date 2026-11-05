@@ -1,11 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { updateProfile, signOut } from 'firebase/auth';
 import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
+import KeyboardScreen from '../../components/KeyboardScreen';
+import AvailabilityPicker, { isValidWindow } from '../../components/AvailabilityPicker';
+import SessionLengthPicker from '../../components/SessionLengthPicker';
+import {
+  cleanUsername, validateUsername, isUsernameAvailable, claimUsername,
+} from '../../utils/username';
+import { useOnline, warnOffline } from '../../utils/connection';
 
 const CATEGORIES = ['Technology', 'Music', 'Cooking', 'Arts', 'Dzongkha'];
 const LEVELS = ['Beginner', 'Intermediate', 'Expert'];
@@ -19,7 +26,6 @@ const PRESET_SKILLS = [
 // options for the teaching details
 const AVAILABILITY_OPTIONS = ['Weekdays', 'Weekday evenings', 'Weekends', 'Flexible'];
 const FORMAT_OPTIONS = ['In-person', 'Online'];
-const SESSION_LENGTHS = [30, 45, 60, 90, 120]; // minutes
 
 // Used twice: to create a profile after sign-up, and to edit it later (isEdit = true)
 export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {} }) {
@@ -28,7 +34,12 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
   const isCustomCategory = savedCategory !== '' && !CATEGORIES.includes(savedCategory);
   const savedDetails = initial.teachingDetails || {};
 
-  const [displayName, setDisplayName] = useState(initial.displayName || '');
+  const [displayName, setDisplayName] = useState(initial.displayName || ''); // the Full Name
+  // new accounts start with a suggestion taken from the email, e.g. pema.d@gmail.com -> pemad
+  const [username, setUsername] = useState(
+    initial.username || (isEdit ? '' : cleanUsername((auth.currentUser?.email || '').split('@')[0]))
+  );
+  const [usernameStatus, setUsernameStatus] = useState({ state: 'idle', msg: '' });
   const [location, setLocation] = useState(initial.location || '');
   const [bio, setBio] = useState(initial.bio || '');
   const [category, setCategory] = useState(isCustomCategory ? 'Other' : savedCategory);
@@ -42,7 +53,34 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
   const [availability, setAvailability] = useState(savedDetails.availability || []);
   const [formats, setFormats] = useState(savedDetails.format || []);
   const [sessionLength, setSessionLength] = useState(savedDetails.sessionLength || null);
+  const [days, setDays] = useState(savedDetails.availabilityDays || []);
+  const [startTime, setStartTime] = useState(savedDetails.availabilityStart || '09:00');
+  const [endTime, setEndTime] = useState(savedDetails.availabilityEnd || '17:00');
   const [saving, setSaving] = useState(false);
+  const online = useOnline();
+
+  // check the username while the user types (waits half a second after the last key)
+  useEffect(() => {
+    if (!username) { setUsernameStatus({ state: 'idle', msg: '' }); return undefined; }
+    const problem = validateUsername(username);
+    if (problem) { setUsernameStatus({ state: 'invalid', msg: problem }); return undefined; }
+    if (username === initial.username) { setUsernameStatus({ state: 'ok', msg: 'This is your current username.' }); return undefined; }
+
+    let cancelled = false;
+    setUsernameStatus({ state: 'checking', msg: 'Checking...' });
+    const timer = setTimeout(async () => {
+      try {
+        const free = await isUsernameAvailable(username, auth.currentUser.uid);
+        if (cancelled) return;
+        setUsernameStatus(free
+          ? { state: 'ok', msg: 'Username is available.' }
+          : { state: 'taken', msg: 'That username is already taken.' });
+      } catch (e) {
+        if (!cancelled) setUsernameStatus({ state: 'error', msg: "Couldn't check right now - we'll check again when you save." });
+      }
+    }, 500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [username]);
 
   // tap an option to select it, tap again to remove it
   const toggleItem = (list, setList, item) => {
@@ -74,7 +112,16 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
     const finalCategory = getFinalCategory();
 
     if (!displayName.trim() || !location.trim() || !category) {
-      Alert.alert('Missing info', 'Please enter your name, location and pick a category.');
+      Alert.alert('Missing info', 'Please enter your full name, location and pick a category.');
+      return;
+    }
+    const usernameProblem = validateUsername(username);
+    if (usernameProblem) {
+      Alert.alert('Username', usernameProblem);
+      return;
+    }
+    if (usernameStatus.state === 'taken') {
+      Alert.alert('Username taken', 'Please choose a different username.');
       return;
     }
     if (!finalCategory) {
@@ -86,11 +133,20 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
       return;
     }
     // mentors must say when and how they teach
-    if (teachSkills.length > 0 && (availability.length === 0 || formats.length === 0 || !sessionLength)) {
+    if (teachSkills.length > 0 && ((availability.length === 0 && days.length === 0) || formats.length === 0 || !sessionLength)) {
       Alert.alert(
         'Teaching details',
         'Please choose when you are available, how you teach and how long a session is.'
       );
+      return;
+    }
+    if (teachSkills.length > 0 && days.length > 0 && !isValidWindow(startTime, endTime)) {
+      Alert.alert('Availability', 'The end time must be after the start time.');
+      return;
+    }
+    // the username is reserved in Firestore, so we need the internet to save
+    if (!online) {
+      warnOffline();
       return;
     }
 
@@ -104,18 +160,29 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
         skillLevels[skill] = levels[skill] || 'Beginner';
       });
 
+      // reserve the username first - this fails if somebody else owns it
+      await claimUsername(username, user.uid, initial.username);
+
       await updateProfile(user, { displayName: displayName.trim() });
 
       // the fields the user can edit
       const profileData = {
         displayName: displayName.trim(),
+        username,
         location: location.trim(),
         bio: bio.trim(),
         category: finalCategory,
         skillsToTeach: teachSkills,
         skillsToLearn: learnSkills,
         skillLevels: skillLevels,
-        teachingDetails: { availability, format: formats, sessionLength },
+        teachingDetails: {
+          availability,
+          format: formats,
+          sessionLength,
+          availabilityDays: days,
+          availabilityStart: startTime,
+          availabilityEnd: endTime,
+        },
       };
 
       if (isEdit) {
@@ -134,7 +201,12 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
 
       onDone();
     } catch (error) {
-      Alert.alert('Could not save profile', error.message);
+      if (error.message === 'USERNAME_TAKEN') {
+        setUsernameStatus({ state: 'taken', msg: 'That username is already taken.' });
+        Alert.alert('Username taken', 'Someone just took that username. Please choose a different one.');
+      } else {
+        Alert.alert('Could not save profile', error.message);
+      }
     } finally {
       setSaving(false);
     }
@@ -183,19 +255,48 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
   );
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <KeyboardScreen contentContainerStyle={styles.container}>
       <Text style={styles.title}>{isEdit ? 'Edit your profile' : 'Tell us about you'}</Text>
       <Text style={styles.subtitle}>This is what other members will see on your profile.</Text>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Name / Username *</Text>
+        <Text style={styles.label}>Full name *</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g. Pema"
+          placeholder="e.g. Pema Dorji"
           placeholderTextColor="#8D99AE"
           value={displayName}
           onChangeText={setDisplayName}
         />
+
+        <Text style={styles.label}>Username *</Text>
+        <View style={styles.usernameRow}>
+          <Text style={styles.at}>@</Text>
+          <TextInput
+            style={styles.usernameInput}
+            placeholder="e.g. pema_d"
+            placeholderTextColor="#8D99AE"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={20}
+            value={username}
+            onChangeText={(t) => setUsername(cleanUsername(t))}
+          />
+          {usernameStatus.state === 'checking' && <ActivityIndicator size="small" color="#E8A33D" />}
+          {usernameStatus.state === 'ok' && <Ionicons name="checkmark-circle" size={20} color="#2D6A4F" />}
+          {(usernameStatus.state === 'taken' || usernameStatus.state === 'invalid') && (
+            <Ionicons name="close-circle" size={20} color="#D62828" />
+          )}
+        </View>
+        <Text
+          style={[
+            styles.usernameHint,
+            usernameStatus.state === 'ok' && { color: '#2D6A4F' },
+            (usernameStatus.state === 'taken' || usernameStatus.state === 'invalid') && { color: '#D62828' },
+          ]}
+        >
+          {usernameStatus.msg || '3-20 letters, numbers or underscores. Others can find you by this name.'}
+        </Text>
 
         <Text style={styles.label}>Location *</Text>
         <TextInput
@@ -281,7 +382,16 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
           <Text style={styles.label}>Teaching details *</Text>
           <Text style={styles.smallLabel}>Learners see this on your profile before they send a request.</Text>
 
-          <Text style={styles.subLabel}>When are you available?</Text>
+          <AvailabilityPicker
+            days={days}
+            setDays={setDays}
+            start={startTime}
+            setStart={setStartTime}
+            end={endTime}
+            setEnd={setEndTime}
+          />
+
+          <Text style={styles.subLabel}>General availability</Text>
           <View style={styles.chipRow}>
             {AVAILABILITY_OPTIONS.map((opt) =>
               optionChip(opt, availability.includes(opt), () => toggleItem(availability, setAvailability, opt))
@@ -296,11 +406,7 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
           </View>
 
           <Text style={styles.subLabel}>How long is a session?</Text>
-          <View style={styles.chipRow}>
-            {SESSION_LENGTHS.map((mins) =>
-              optionChip(`${mins} mins`, sessionLength === mins, () => setSessionLength(mins), '#1F456D')
-            )}
-          </View>
+          <SessionLengthPicker value={sessionLength} onChange={setSessionLength} />
         </View>
       )}
 
@@ -323,7 +429,7 @@ export default function ProfileSetupScreen({ onDone, isEdit = false, initial = {
           <Text style={styles.link}>Log out</Text>
         </TouchableOpacity>
       )}
-    </ScrollView>
+    </KeyboardScreen>
   );
 }
 
@@ -343,6 +449,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAF7F0', borderRadius: 12, padding: 12, fontSize: 15,
     color: '#1A1A1A', marginBottom: 8,
   },
+  usernameRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#FAF7F0',
+    borderRadius: 12, paddingHorizontal: 12,
+  },
+  at: { fontSize: 16, color: '#C97C1F', fontWeight: 'bold' },
+  usernameInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 6, fontSize: 15, color: '#1A1A1A' },
+  usernameHint: { fontSize: 12, color: '#5F6368', marginTop: 4, marginBottom: 8 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 6 },
   chip: {
     flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E5E5E5',

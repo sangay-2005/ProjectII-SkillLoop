@@ -12,6 +12,7 @@ import ReviewsSection from '../components/ReviewsSection';
 import { loadWithCache } from '../utils/cache';
 import { useOnline, warnOffline } from '../utils/connection';
 import { sendPush } from '../utils/notifications';
+import { formatAvailability } from '../components/AvailabilityPicker';
 
 export default function MentorProfileScreen({ route }) {
   const { mentorId } = route.params;
@@ -140,6 +141,7 @@ export default function MentorProfileScreen({ route }) {
   const availabilityText = (details.availability || []).join(', ') || 'Not specified';
   const formatText = (details.format || []).join(' / ') || 'Not specified';
   const sessionText = details.sessionLength ? `${details.sessionLength} mins` : 'Not specified';
+  const scheduleText = formatAvailability(details);
 
   // one line in the Teaching Details card
   const detailRow = (icon, label, value) => (
@@ -157,6 +159,7 @@ export default function MentorProfileScreen({ route }) {
       <View style={[styles.card, { alignItems: 'center' }]}>
         <Avatar name={mentor.displayName} size={80} />
         <Text style={styles.name}>{mentor.displayName}</Text>
+        {mentor.username ? <Text style={styles.username}>@{mentor.username}</Text> : null}
 
         {hasReviews(mentor) ? (
           <View style={styles.ratingPill}>
@@ -184,6 +187,7 @@ export default function MentorProfileScreen({ route }) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Teaching Details</Text>
         {detailRow('calendar-outline', 'Availability', availabilityText)}
+        {scheduleText ? detailRow('alarm-outline', 'Available', scheduleText) : null}
         {detailRow('people-outline', 'Format', formatText)}
         {detailRow('time-outline', 'Session length', sessionText)}
       </View>
@@ -259,6 +263,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
   name: { fontSize: 22, fontWeight: 'bold', color: '#1F456D', marginTop: 12 },
+  username: { fontSize: 14, fontWeight: '600', color: '#C97C1F', marginTop: 2 },
   ratingPill: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#FBF0DC',
     paddingVertical: 4, paddingHorizontal: 12, borderRadius: 14, marginTop: 8,

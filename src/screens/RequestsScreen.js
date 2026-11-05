@@ -42,60 +42,61 @@ export default function RequestsScreen({ navigation }) {
   const loadRequests = async () => {
     setLoading(true);
 
-    // Fresh from Firestore when online,
-    // the saved copy when offline.
-    const data = await loadWithCache(`${myUid}_requests`, async () => {
-      const requestsRef = collection(db, 'requests');
+    try {
+      const data = await loadWithCache(`${myUid}_requests`, async () => {
+        const requestsRef = collection(db, 'requests');
 
-      const receivedSnap = await getDocs(
-        query(requestsRef, where('receiverId', '==', myUid))
-      );
+        const receivedSnap = await getDocs(
+          query(requestsRef, where('receiverId', '==', myUid))
+        );
 
-      const sentSnap = await getDocs(
-        query(requestsRef, where('senderId', '==', myUid))
-      );
+        const sentSnap = await getDocs(
+          query(requestsRef, where('senderId', '==', myUid))
+        );
 
-      return {
-        receivedAll: receivedSnap.docs.map((d) => ({
-          ...d.data(),
-          id: d.id,
-        })),
+        return {
+          receivedAll: receivedSnap.docs.map((d) => ({
+            ...d.data(),
+            id: d.id,
+          })),
 
-        sentAll: sentSnap.docs.map((d) => ({
-          ...d.data(),
-          id: d.id,
-        })),
-      };
-    });
+          sentAll: sentSnap.docs.map((d) => ({
+            ...d.data(),
+            id: d.id,
+          })),
+        };
+      });
 
-    if (data) {
-      const newestFirst = (a, b) =>
-        (b.timestamp || 0) - (a.timestamp || 0);
+      if (data) {
+        const newestFirst = (a, b) =>
+          (b.timestamp || 0) - (a.timestamp || 0);
 
-      setReceived(
-        data.receivedAll
-          .filter((r) => r.status === 'pending')
-          .sort(newestFirst)
-      );
+        setReceived(
+          data.receivedAll
+            .filter((r) => r.status === 'pending')
+            .sort(newestFirst)
+        );
 
-      setSent(
-        data.sentAll
-          .filter((r) => r.status === 'pending')
-          .sort(newestFirst)
-      );
+        setSent(
+          data.sentAll
+            .filter((r) => r.status === 'pending')
+            .sort(newestFirst)
+        );
 
-      setActive(
-        [...data.receivedAll, ...data.sentAll]
-          .filter((r) => r.status === 'accepted')
-          .sort(newestFirst)
-      );
+        setActive(
+          [...data.receivedAll, ...data.sentAll]
+            .filter((r) => r.status === 'accepted')
+            .sort(newestFirst)
+        );
+      }
+    } catch (error) {
+      console.log('[requests] Loading failed:', error.message);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
-  // Reload when the tab is opened,
-  // and again when the connection comes back.
+  // Reload when the tab is opened or the connection returns.
   useFocusEffect(
     useCallback(() => {
       loadRequests();
@@ -103,20 +104,40 @@ export default function RequestsScreen({ navigation }) {
   );
 
   const updateStatus = async (item, newStatus) => {
-    if (!online) { warnOffline(); return; }
-    try {
-      await updateDoc(doc(db, 'requests', item.id), { status: newStatus });
+    if (!online) {
+      warnOffline();
+      return;
+    }
 
-      // tell the learner their request was accepted
+    try {
+      await updateDoc(doc(db, 'requests', item.id), {
+        status: newStatus,
+      });
+
+      // Notify the learner when their request is accepted or declined.
       if (newStatus === 'accepted') {
-        sendPush(
+        await sendPush(
           item.senderId,
           'Request accepted',
           `${item.receiverName} accepted your request to learn ${item.skillName}`,
-          { type: 'accepted', requestId: item.id }
+          {
+            type: 'accepted',
+            requestId: item.id,
+          }
+        );
+      } else if (newStatus === 'declined') {
+        await sendPush(
+          item.senderId,
+          'Request declined',
+          `${item.receiverName} declined your request to learn ${item.skillName}`,
+          {
+            type: 'declined',
+            requestId: item.id,
+          }
         );
       }
-      loadRequests();
+
+      await loadRequests();
     } catch (error) {
       Alert.alert('Error', error.message);
     }
@@ -142,7 +163,7 @@ export default function RequestsScreen({ navigation }) {
           onPress: async () => {
             try {
               await deleteDoc(doc(db, 'requests', requestId));
-              loadRequests();
+              await loadRequests();
             } catch (error) {
               Alert.alert('Error', error.message);
             }

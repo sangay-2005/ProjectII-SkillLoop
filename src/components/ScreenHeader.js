@@ -18,33 +18,23 @@ export default function ScreenHeader({ small, title, subtitle, rightIcon, onRigh
         borderBottomLeftRadius: 32, borderBottomRightRadius: 32, overflow: 'hidden',
       }}
     >
-      {/* decorative loop rings */}
+      {/* decorative loop rings (they never take touches) */}
       <View
+        pointerEvents="none"
         style={{
           position: 'absolute', top: -35, right: -35, width: 150, height: 150,
           borderRadius: 75, borderWidth: 18, borderColor: 'rgba(232,163,61,0.30)',
         }}
       />
       <View
+        pointerEvents="none"
         style={{
           position: 'absolute', top: 40, right: 60, width: 56, height: 56,
           borderRadius: 28, borderWidth: 8, borderColor: 'rgba(250,247,240,0.10)',
         }}
       />
 
-      {rightIcon ? (
-        <TouchableOpacity
-          onPress={onRightPress}
-          style={{
-            position: 'absolute', top: topPadding - 4, right: 20, width: 42, height: 42, borderRadius: 21,
-            backgroundColor: 'rgba(250,247,240,0.15)', justifyContent: 'center', alignItems: 'center',
-          }}
-        >
-          <Ionicons name={rightIcon} size={22} color="#FAF7F0" />
-        </TouchableOpacity>
-      ) : null}
-
-      <View style={{ paddingRight: rightIcon ? 52 : 0 }}>
+      <View pointerEvents="box-none" style={{ paddingRight: rightIcon ? 52 : 0 }}>
         {small ? <Text style={{ color: '#E8C38A', fontSize: 14 }}>{small}</Text> : null}
         <Text style={{ color: '#FAF7F0', fontSize: 26, fontWeight: 'bold' }}>{title}</Text>
         {subtitle ? (
@@ -52,6 +42,22 @@ export default function ScreenHeader({ small, title, subtitle, rightIcon, onRigh
         ) : null}
       </View>
       {children}
+
+      {/* drawn last so it sits on top and can be tapped */}
+      {rightIcon ? (
+        <TouchableOpacity
+          onPress={onRightPress}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{
+            position: 'absolute', top: topPadding - 4, right: 20, width: 42, height: 42, borderRadius: 21,
+            backgroundColor: 'rgba(250,247,240,0.15)', justifyContent: 'center', alignItems: 'center',
+            zIndex: 10, elevation: 10,
+          }}
+        >
+          <Ionicons name={rightIcon} size={22} color="#FAF7F0" />
+        </TouchableOpacity>
+      ) : null}
     </LinearGradient>
   );
 }

@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import Avatar from '../components/Avatar';
+import { hasUnread } from '../hooks/useBadgeCounts';
+import { saveCache, loadCache } from '../utils/cache';
 
 // time of day if it was today, otherwise the date
 const formatWhen = (timestamp) => {
@@ -16,43 +17,80 @@ const formatWhen = (timestamp) => {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 };
 
-// Lists every accepted Loop (as learner or mentor), newest conversation first
+const newestFirst = (a, b) =>
+  (b.lastMessageAt || b.timestamp || 0) - (a.lastMessageAt || a.timestamp || 0);
+
+// Lists every accepted Loop (as learner or mentor), newest conversation first.
+// Updates live, and shows the saved copy first (also when offline).
 export default function ChatListScreen({ navigation }) {
   const [chats, setChats] = useState([]);
   const [loading, setLoading] = useState(true);
   const myUid = auth.currentUser.uid;
 
-  const loadChats = async () => {
-    try {
-      const requestsRef = collection(db, 'requests');
-      const asLearner = await getDocs(
-        query(requestsRef, where('senderId', '==', myUid), where('status', '==', 'accepted'))
-      );
-      const asMentor = await getDocs(
-        query(requestsRef, where('receiverId', '==', myUid), where('status', '==', 'accepted'))
-      );
+  useEffect(() => {
+    let alive = true;
+    const cacheKey = `${myUid}_chatlist`;
+    const requestsRef = collection(db, 'requests');
 
-      const all = [...asLearner.docs, ...asMentor.docs].map((d) => ({ ...d.data(), id: d.id }));
-      all.sort(
-        (a, b) => (b.lastMessageAt || b.timestamp || 0) - (a.lastMessageAt || a.timestamp || 0)
-      );
-      setChats(all);
-    } catch (error) {
-      console.log('Error loading chats:', error.message);
-    } finally {
+    let sentDocs = null;      // Loops where I am the learner
+    let receivedDocs = null;  // Loops where I am the mentor
+    let sentFresh = false;    // true when the answer came from the server, not the phone's memory
+    let receivedFresh = false;
+    let live = false;
+
+    // saved copy first
+    loadCache(cacheKey).then((saved) => {
+      if (!alive || live || !saved) return;
+      setChats(saved);
       setLoading(false);
-    }
-  };
+    });
 
-  // reload whenever this screen is shown
-  useFocusEffect(
-    useCallback(() => {
-      loadChats();
-    }, [])
-  );
+    // join both lists once BOTH have answered, so a half-loaded list never appears or gets saved
+    const publish = () => {
+      if (!sentDocs || !receivedDocs) return;
+      const all = [...sentDocs, ...receivedDocs].sort(newestFirst);
+      live = true;
+      setChats(all);
+      setLoading(false);
+      if (sentFresh && receivedFresh) saveCache(cacheKey, all);
+    };
+
+    const listen = (field, assign) =>
+      onSnapshot(
+        query(requestsRef, where(field, '==', myUid), where('status', '==', 'accepted')),
+        (snapshot) => {
+          if (!alive) return;
+          // an empty answer from the phone's own memory (offline) must not hide the saved list
+          if (snapshot.metadata.fromCache && snapshot.empty) return;
+          assign(
+            snapshot.docs.map((d) => ({ ...d.data(), id: d.id })),
+            !snapshot.metadata.fromCache
+          );
+          publish();
+        },
+        (error) => {
+          console.log('Chat list error:', error.message);
+          if (alive) setLoading(false);
+        }
+      );
+
+    const unsubscribeSent = listen('senderId', (list, fresh) => { sentDocs = list; sentFresh = fresh; });
+    const unsubscribeReceived = listen('receiverId', (list, fresh) => { receivedDocs = list; receivedFresh = fresh; });
+
+    // offline with nothing saved: stop the spinner instead of spinning forever
+    const timer = setTimeout(() => { if (alive) setLoading(false); }, 4000);
+
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      unsubscribeSent();
+      unsubscribeReceived();
+    };
+  }, [myUid]);
 
   const renderChat = ({ item }) => {
     const partnerName = item.senderId === myUid ? item.receiverName : item.senderName;
+    const unread = hasUnread(item, myUid); // the same rule as the Messages tab badge
     const preview = item.lastMessage
       ? `${item.lastSenderId === myUid ? 'You: ' : ''}${item.lastMessage}`
       : 'Say hello and plan your first session';
@@ -70,11 +108,27 @@ export default function ChatListScreen({ navigation }) {
       >
         <Avatar name={partnerName} size={46} />
         <View style={{ flex: 1, marginLeft: 14 }}>
-          <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1F456D' }}>{partnerName}</Text>
+          <Text style={{ fontSize: 16, fontWeight: unread ? 'bold' : '600', color: '#1F456D' }}>{partnerName}</Text>
           <Text style={{ fontSize: 12, color: '#2D6A4F', fontWeight: '600', marginTop: 2 }}>{item.skillName}</Text>
-          <Text numberOfLines={1} style={{ fontSize: 13, color: '#5F6368', marginTop: 4 }}>{preview}</Text>
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: 13, marginTop: 4,
+              color: unread ? '#1A1A1A' : '#5F6368',
+              fontWeight: unread ? '700' : '400',
+            }}
+          >
+            {preview}
+          </Text>
         </View>
-        <Text style={{ fontSize: 11, color: '#8D99AE' }}>{formatWhen(item.lastMessageAt)}</Text>
+        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+          <Text style={{ fontSize: 11, color: unread ? '#C97C1F' : '#8D99AE', fontWeight: unread ? 'bold' : '400' }}>
+            {formatWhen(item.lastMessageAt)}
+          </Text>
+          {unread && (
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#E8A33D', marginTop: 8 }} />
+          )}
+        </View>
       </TouchableOpacity>
     );
   };
