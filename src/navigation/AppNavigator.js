@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +8,9 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { loadWithCache } from '../utils/cache';
+import useLiveNotifications from '../hooks/useLiveNotifications';
 
+import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import SignupScreen from '../screens/auth/SignupScreen';
 import ProfileSetupScreen from '../screens/auth/ProfileSetupScreen';
@@ -18,17 +19,19 @@ import DiscoverScreen from '../screens/DiscoverScreen';
 import MentorProfileScreen from '../screens/MentorProfileScreen';
 import RequestsScreen from '../screens/RequestsScreen';
 import ChatScreen from '../screens/ChatScreen';
+import ChatListScreen from '../screens/ChatListScreen';
 import LearningJourneyScreen from '../screens/LearningJourneyScreen';
 import LoopDetailScreen from '../screens/LoopDetailScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
-import ChatListScreen from '../screens/ChatListScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Cream background behind every screen
+// lets the notification code open screens from outside the navigator
+const navigationRef = createNavigationContainerRef();
+
+// cream background behind every screen
 const AppTheme = {
   ...DefaultTheme,
   colors: {
@@ -66,16 +69,9 @@ function MainTabs() {
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
         },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarIcon: ({ focused, color }) => (
-          <Ionicons
-            name={TAB_ICONS[route.name][focused ? 0 : 1]}
-            size={24}
-            color={color}
-          />
+          <Ionicons name={TAB_ICONS[route.name][focused ? 0 : 1]} size={24} color={color} />
         ),
       })}
     >
@@ -93,134 +89,70 @@ export default function AppNavigator() {
   const [hasProfile, setHasProfile] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
+  // live notifications run only while a user with a finished profile is logged in
+  useLiveNotifications(navigationRef, !!user && hasProfile);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        // Online: ask Firestore and remember the answer.
-        // Offline: use the remembered answer.
-        const completed = await loadWithCache(
-          `${currentUser.uid}_hasProfile`,
-          async () => {
-            const snap = await getDoc(doc(db, 'users', currentUser.uid));
-            return (
-              snap.exists() &&
-              snap.data().profileCompleted === true
-            );
-          }
-        );
-
+        // online: ask Firestore and remember the answer; offline: use the remembered answer
+        const completed = await loadWithCache(`${currentUser.uid}_hasProfile`, async () => {
+          const snap = await getDoc(doc(db, 'users', currentUser.uid));
+          return snap.exists() && snap.data().profileCompleted === true;
+        });
         setHasProfile(completed === true);
       } else {
         setHasProfile(false);
       }
-
       setUser(currentUser);
       setCheckingAuth(false);
     });
-
     return unsubscribe;
   }, []);
 
   if (checkingAuth) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: '#FAF7F0',
-        }}
-      >
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FAF7F0' }}>
         <ActivityIndicator size="large" color="#E8A33D" />
       </View>
     );
   }
 
   return (
-    <NavigationContainer theme={AppTheme}>
+    <NavigationContainer ref={navigationRef} theme={AppTheme}>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: {
-            backgroundColor: '#1F456D',
-          },
+          headerStyle: { backgroundColor: '#1F456D' },
           headerTintColor: '#FAF7F0',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
+          headerTitleStyle: { fontWeight: 'bold' },
           headerShadowVisible: false,
         }}
       >
         {!user ? (
           <>
-            <Stack.Screen
-              name="Welcome"
-              component={WelcomeScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Login"
-              component={LoginScreen}
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen
-              name="Signup"
-              component={SignupScreen}
-              options={{ headerShown: false }}
-            />
+            <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Signup" component={SignupScreen} options={{ headerShown: false }} />
           </>
         ) : !hasProfile ? (
           <Stack.Screen
             name="ProfileSetup"
-            options={{
-              title: 'Set Up Your Profile',
-              headerBackVisible: false,
-            }}
+            options={{ title: 'Set Up Your Profile', headerBackVisible: false }}
           >
-            {() => (
-              <ProfileSetupScreen
-                onDone={() => setHasProfile(true)}
-              />
-            )}
+            {() => <ProfileSetupScreen onDone={() => setHasProfile(true)} />}
           </Stack.Screen>
         ) : (
           <>
-            <Stack.Screen
-              name="MainTabs"
-              component={MainTabs}
-              options={{ headerShown: false }}
-            />
-
-            <Stack.Screen
-              name="MentorProfile"
-              component={MentorProfileScreen}
-              options={{ title: 'Mentor Profile' }}
-            />
-
+            <Stack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
+            <Stack.Screen name="MentorProfile" component={MentorProfileScreen} options={{ title: 'Mentor Profile' }} />
             <Stack.Screen
               name="Chat"
               component={ChatScreen}
-              options={({ route }) => ({
-                title: route.params?.partnerName || 'Chat',
-              })}
+              options={({ route }) => ({ title: route.params?.partnerName || 'Chat' })}
             />
-
-            <Stack.Screen
-              name="ChatList"
-              component={ChatListScreen}
-              options={{ title: 'Messages' }}
-            />
-
-            <Stack.Screen
-              name="LoopDetail"
-              component={LoopDetailScreen}
-              options={{ title: 'My Loop' }}
-            />
-
-            <Stack.Screen
-              name="EditProfile"
-              component={EditProfileScreen}
-              options={{ title: 'Edit Profile' }}
-            />
+            <Stack.Screen name="ChatList" component={ChatListScreen} options={{ title: 'Messages' }} />
+            <Stack.Screen name="LoopDetail" component={LoopDetailScreen} options={{ title: 'My Loop' }} />
+            <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
           </>
         )}
       </Stack.Navigator>

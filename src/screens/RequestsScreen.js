@@ -25,6 +25,7 @@ import ScreenHeader from '../components/ScreenHeader';
 import Avatar from '../components/Avatar';
 import { loadWithCache } from '../utils/cache';
 import { useOnline, warnOffline } from '../utils/connection';
+import { sendPush } from '../utils/notifications';
 
 const TABS = ['Received', 'Sent', 'Active'];
 
@@ -101,17 +102,20 @@ export default function RequestsScreen({ navigation }) {
     }, [online])
   );
 
-  const updateStatus = async (requestId, newStatus) => {
-    if (!online) {
-      warnOffline();
-      return;
-    }
-
+  const updateStatus = async (item, newStatus) => {
+    if (!online) { warnOffline(); return; }
     try {
-      await updateDoc(doc(db, 'requests', requestId), {
-        status: newStatus,
-      });
+      await updateDoc(doc(db, 'requests', item.id), { status: newStatus });
 
+      // tell the learner their request was accepted
+      if (newStatus === 'accepted') {
+        sendPush(
+          item.senderId,
+          'Request accepted',
+          `${item.receiverName} accepted your request to learn ${item.skillName}`,
+          { type: 'accepted', requestId: item.id }
+        );
+      }
       loadRequests();
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -209,7 +213,7 @@ export default function RequestsScreen({ navigation }) {
           <View style={styles.buttonRow}>
             <TouchableOpacity
               style={styles.acceptButton}
-              onPress={() => updateStatus(item.id, 'accepted')}
+              onPress={() => updateStatus(item, 'accepted')}
             >
               <Ionicons name="checkmark" size={16} color="#fff" />
               <Text style={styles.acceptText}>Accept</Text>
@@ -217,7 +221,7 @@ export default function RequestsScreen({ navigation }) {
 
             <TouchableOpacity
               style={styles.declineButton}
-              onPress={() => updateStatus(item.id, 'declined')}
+              onPress={() => updateStatus(item, 'declined')}
             >
               <Ionicons name="close" size={16} color="#D62828" />
               <Text style={styles.declineText}>Decline</Text>

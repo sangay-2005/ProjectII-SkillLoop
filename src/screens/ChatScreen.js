@@ -1,13 +1,15 @@
-
 import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView,
   Platform, Alert, StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc } from 'firebase/firestore';
+import {
+  collection, query, orderBy, onSnapshot, doc, getDoc, setDoc, updateDoc,
+} from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { useOnline, warnOffline } from '../utils/connection';
+import { sendPush } from '../utils/notifications';
 
 const formatTime = (timestamp) =>
   new Date(timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -20,9 +22,18 @@ export default function ChatScreen({ route }) {
   const myName = auth.currentUser.displayName || auth.currentUser.email;
   const online = useOnline();
 
+  const [loop, setLoop] = useState(null); // the Loop, so we know who the other person is
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    getDoc(doc(db, 'requests', requestId))
+      .then((snap) => {
+        if (snap.exists()) setLoop(snap.data());
+      })
+      .catch((error) => console.log('Could not load Loop:', error.message));
+  }, [requestId]);
 
   // real-time listener: new messages appear by themselves
   useEffect(() => {
@@ -40,20 +51,18 @@ export default function ChatScreen({ route }) {
   const sendMessage = async () => {
     const content = text.trim();
     if (!content || sending) return;
-
     if (!online) { warnOffline(); return; }
 
     setSending(true);
     setText('');
     try {
       const ref = doc(collection(db, 'requests', requestId, 'messages'));
-      const now = Date.now();
       await setDoc(ref, {
         id: ref.id,
         text: content,
         senderId: myUid,
         senderName: myName,
-        timestamp: now,
+        timestamp: Date.now(),
       });
     } catch (error) {
       setText(content); // give the text back so nothing is lost
@@ -62,7 +71,7 @@ export default function ChatScreen({ route }) {
       return;
     }
 
-    // keep a preview on the Loop so the chat list can show it
+    // keep a preview on the Loop so the chat list and notifications can use it
     try {
       await updateDoc(doc(db, 'requests', requestId), {
         lastMessage: content,
@@ -71,6 +80,12 @@ export default function ChatScreen({ route }) {
       });
     } catch (error) {
       console.log('Preview not updated:', error.message);
+    }
+
+    // push to the other person (for when their app is closed)
+    if (loop) {
+      const partnerId = loop.senderId === myUid ? loop.receiverId : loop.senderId;
+      sendPush(partnerId, myName, content, { type: 'message', requestId, partnerName: myName });
     }
     setSending(false);
   };

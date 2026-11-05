@@ -11,6 +11,7 @@ import { hasReviews, ratingText } from '../utils/rating';
 import ReviewsSection from '../components/ReviewsSection';
 import { loadWithCache } from '../utils/cache';
 import { useOnline, warnOffline } from '../utils/connection';
+import { sendPush } from '../utils/notifications';
 
 export default function MentorProfileScreen({ route }) {
   const { mentorId } = route.params;
@@ -107,6 +108,8 @@ export default function MentorProfileScreen({ route }) {
         status: 'pending',
         timestamp: Date.now(),
       });
+      // tell the mentor (a push, for when their app is closed)
+      sendPush(mentorId, 'New request', `${myName} wants to learn ${selectedSkill} from you`, { type: 'request' });
       setAlreadyRequested(true);
       Alert.alert('Request sent', `Your request to learn ${selectedSkill} has been sent.`);
     } catch (error) {
