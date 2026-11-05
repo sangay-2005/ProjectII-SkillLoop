@@ -1,11 +1,11 @@
 
-# SkillLoop â€“ Learn. Share. Repeat.
+# SkillLoop - Learn. Share. Repeat.
 
 SkillLoop is a cross-platform skill-exchange mobile application developed using React Native (Expo) and Firebase. It connects people who want to learn new skills with people who are willing to share their knowledge.
 
-The application provides a platform where learners can discover mentors, send learning requests, communicate through real-time messaging, arrange learning sessions, and track their learning progress.
+Learners can discover mentors, send learning requests, communicate through real-time messaging, arrange learning sessions, and track their learning progress.
 
-**Project:** CTE308 â€“ Mobile Application Development (Project-II)
+**Project:** CTE308 - Mobile Application Development (Project-II)
 **Institution:** College of Science and Technology (CST)
 **University:** Royal University of Bhutan (RUB)
 
@@ -17,7 +17,7 @@ The application provides a platform where learners can discover mentors, send le
 - User registration and login using email and password.
 - User profile creation and management.
 - Edit profile information and teaching details.
-- Firebase Authentication for secure user authentication.
+- Firebase Authentication.
 
 ### 2. Skill Discovery
 - Browse available skills and mentors.
@@ -62,7 +62,7 @@ The application provides a platform where learners can discover mentors, send le
 - Handle notifications for new chat messages.
 - Manage notification tokens during logout and account switching.
 
-*Note: Push notification registration and handling are implemented. Actual remote notification delivery requires end-to-end testing using an Expo development build.*
+**Note:** Push notification registration and handling are implemented. Actual remote notification delivery still requires end-to-end testing using an Expo development build.
 
 ### 9. Offline Support
 - View previously saved application data without an internet connection.
@@ -93,30 +93,30 @@ The application provides a platform where learners can discover mentors, send le
 
 ```text
 SkillLoop/
-â”‚
-â”œâ”€â”€ assets/
-â”‚
-â”œâ”€â”€ src/
-â”‚   â”œâ”€â”€ components/
-â”‚   â”‚
-â”‚   â”œâ”€â”€ config/
-â”‚   â”‚   â””â”€â”€ firebase.js
-â”‚   â”‚
-â”‚   â”œâ”€â”€ hooks/
-â”‚   â”‚
-â”‚   â”œâ”€â”€ navigation/
-â”‚   â”‚
-â”‚   â”œâ”€â”€ screens/
-â”‚   â”‚   â”œâ”€â”€ auth/
-â”‚   â”‚   â””â”€â”€ ...
-â”‚   â”‚
-â”‚   â””â”€â”€ utils/
-â”‚
-â”œâ”€â”€ App.js
-â”œâ”€â”€ app.json
-â”œâ”€â”€ package.json
-â”œâ”€â”€ package-lock.json
-â””â”€â”€ README.md
+|
+|-- assets/
+|
+|-- src/
+|   |-- components/
+|   |
+|   |-- config/
+|   |   |-- firebase.js
+|   |
+|   |-- hooks/
+|   |
+|   |-- navigation/
+|   |
+|   |-- screens/
+|   |   |-- auth/
+|   |   |-- ...
+|   |
+|   |-- utils/
+|
+|-- App.js
+|-- app.json
+|-- package.json
+|-- package-lock.json
+|-- README.md
 ```
 
 ---
@@ -171,7 +171,7 @@ Ensure that the Firebase configuration matches the project setup.
 npx expo start
 ```
 
-If the Expo command through `npx` is unavailable in your environment, use:
+If the Expo command through npx is unavailable in your environment, use:
 
 ```bash
 node node_modules/expo/bin/cli start
@@ -191,10 +191,10 @@ The main collections include:
 users/
 usernames/
 requests/
-    â””â”€â”€ requestId/
-        â”œâ”€â”€ messages/
-        â”œâ”€â”€ progress/
-        â””â”€â”€ sessions/
+    |-- requestId/
+        |-- messages/
+        |-- progress/
+        |-- sessions/
 reviews/
 ```
 
@@ -243,5 +243,6 @@ Royal University of Bhutan
 
 ---
 
-**GitHub Repository:**
-https://github.com/sangay-2005/ProjectII-SkillLoop.git
+## GitHub Repository
+
+https://github.com/sangay-2005/ProjectII-SkillLoop
