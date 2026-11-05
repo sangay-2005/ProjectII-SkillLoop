@@ -1,15 +1,20 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 // Curved navy header used at the top of every main screen.
 // Optional: rightIcon + onRightPress add a round button in the top-right corner.
 export default function ScreenHeader({ small, title, subtitle, rightIcon, onRightPress, children }) {
+  // keeps the header below the status bar or camera cut-out on every phone
+  const insets = useSafeAreaInsets();
+  const topPadding = insets.top + 16;
+
   return (
     <LinearGradient
       colors={['#1F456D', '#163A5C']}
       style={{
-        paddingTop: 56, paddingHorizontal: 20, paddingBottom: 22,
+        paddingTop: topPadding, paddingHorizontal: 20, paddingBottom: 22,
         borderBottomLeftRadius: 32, borderBottomRightRadius: 32, overflow: 'hidden',
       }}
     >
@@ -31,7 +36,7 @@ export default function ScreenHeader({ small, title, subtitle, rightIcon, onRigh
         <TouchableOpacity
           onPress={onRightPress}
           style={{
-            position: 'absolute', top: 52, right: 20, width: 42, height: 42, borderRadius: 21,
+            position: 'absolute', top: topPadding - 4, right: 20, width: 42, height: 42, borderRadius: 21,
             backgroundColor: 'rgba(250,247,240,0.15)', justifyContent: 'center', alignItems: 'center',
           }}
         >

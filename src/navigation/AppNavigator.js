@@ -8,7 +8,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { loadWithCache } from '../utils/cache';
-import useLiveNotifications from '../hooks/useLiveNotifications';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -24,6 +24,7 @@ import LearningJourneyScreen from '../screens/LearningJourneyScreen';
 import LoopDetailScreen from '../screens/LoopDetailScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EditProfileScreen from '../screens/EditProfileScreen';
+import useLiveNotifications from '../hooks/useLiveNotifications';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -54,6 +55,8 @@ const TAB_ICONS = {
 };
 
 function MainTabs() {
+  // leave room for the phone's own navigation buttons or gesture bar
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -62,9 +65,9 @@ function MainTabs() {
         tabBarInactiveTintColor: '#8FA3B8',
         tabBarStyle: {
           backgroundColor: '#1F456D',
-          height: 68,
+          height: 60 + insets.bottom,
           paddingTop: 8,
-          paddingBottom: 10,
+          paddingBottom: Math.max(insets.bottom, 10),
           borderTopWidth: 0,
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
